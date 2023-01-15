@@ -1,4 +1,4 @@
-figma.showUI(__html__);
+figma.showUI(__html__, { height: 850, width: 500 });
 let settings = {
   h1: {
     name: 'text',

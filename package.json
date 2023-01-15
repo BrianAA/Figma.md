@@ -9,8 +9,14 @@
     "prettier:format": "prettier --write '**/*.{js,jsx,ts,tsx,css,json}' "
   },
   "dependencies": {
+    "hast-util-to-html": "^8.0.4",
+    "html-react-parser": "^3.0.7",
+    "mdast-util-from-markdown": "^1.2.0",
+    "prism-themes": "^1.9.0",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "react-simple-code-editor": "^0.13.1",
+    "refractor": "^4.8.0"
   },
   "devDependencies": {
     "@figma/plugin-typings": "^1.57.1",

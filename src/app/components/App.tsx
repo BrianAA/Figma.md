@@ -16,8 +16,6 @@ refractor.register(markdown);
 function App() {
   // const [Blocks, setBlocks] = React.useState();
   const [Data, setData] = React.useState('');
-  const [Index, setIndex] = React.useState(0);
-  const [Prev, setPrev] = React.useState(-1);
   const test = React.useRef();
 
   function CreateMarkdownEditor(data) {
@@ -39,11 +37,8 @@ function App() {
       }
     };
     document.addEventListener('keypress', (e) => {
-      if (e.key == 'Enter') {
-        console.log('Enter');
-
-        setIndex((i) => i + 1);
-        setPrev(Index - 1);
+      if (e.key == 'Delete') {
+        setData('');
       }
     });
   }, []);
@@ -54,7 +49,6 @@ function App() {
       mdastExtensions: [gfmTaskListItemFromMarkdown],
     });
     if (Markdown.children.length == 0) return;
-    if (Prev == Index) return;
     parent.postMessage(
       {
         pluginMessage: {

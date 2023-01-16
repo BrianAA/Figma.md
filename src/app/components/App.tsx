@@ -80,6 +80,7 @@ function App() {
           border: `1px solid #E9E9E9 `,
         }}
       />
+
       <button onClick={getSVG}>Get SVG</button>
       <p ref={test}>
         This is text <code>This is code</code> see the difference

@@ -43,8 +43,45 @@ figma.ui.onmessage = async (msg) => {
   if (msg.type === 'create-components') {
     CreateMarkdownComponents();
   }
-};
 
+  if (msg.type == 'setMarkdown') {
+    console.log(msg);
+    let id = figma.currentPage.selection[0].id;
+    BuildMarkdown(msg.markdown, id);
+  }
+
+  async function BuildMarkdown(mkdwn, id) {
+    let doc = figma.getNodeById(id) as FrameNode;
+    await figma.loadFontAsync({ family: 'Inter', style: 'Regular' });
+    if (!doc) {
+      return;
+    }
+    if (doc.children.length > 0) {
+      doc.children.forEach((element) => {
+        element.remove();
+      });
+    }
+    for (let i = 0; i < mkdwn.length; i++) {
+      const block = mkdwn[i];
+      switch (block.type) {
+        case 'heading':
+          const heading = figma.createText();
+          heading.fontSize = 32;
+          heading.characters = block.children[0].value;
+          doc.appendChild(heading);
+          break;
+        case 'paragraph':
+          const paragraph = figma.createText();
+          paragraph.fontSize = 16;
+          paragraph.characters = block.children[0].value;
+          doc.appendChild(paragraph);
+          break;
+        default:
+          break;
+      }
+    }
+  }
+};
 async function CreateMarkdownComponents() {
   //H1
   const fontInterBold = { family: 'Inter', style: 'Bold' };
@@ -82,4 +119,31 @@ async function CreateMarkdownComponents() {
   Section.appendChild(OrganizeComponent);
 }
 
-function AssignMarkDownComponents() {}
+//@ts-ignore
+async function CreateText(text) {
+  const paragraphFrame = figma.createFrame();
+  paragraphFrame.layoutMode = 'VERTICAL';
+  paragraphFrame.counterAxisSizingMode = 'FIXED';
+  paragraphFrame.primaryAxisSizingMode = 'AUTO';
+  paragraphFrame.resize(400, 400);
+
+  //Load fonts
+  await figma.loadFontAsync({ family: 'Inter', style: 'Regular' });
+
+  let words = text.split('');
+  let row = figma.createFrame();
+  row.itemSpacing = 0;
+  row.layoutMode = 'HORIZONTAL';
+  row.layoutAlign = 'STRETCH';
+  row.counterAxisSizingMode = 'AUTO';
+  for (let i = 0; i < words.length; i++) {
+    const word = words[i];
+    if (row.width < paragraphFrame.width) {
+      const wordText = figma.createText();
+      wordText.characters = word + ' ';
+      row.appendChild(wordText);
+    } else {
+      //make new row
+    }
+  }
+}

@@ -4,7 +4,6 @@ import Editor from 'react-simple-code-editor';
 import { refractor } from 'refractor/lib/core';
 import markdown from 'refractor/lang/markdown';
 import { toHtml } from 'hast-util-to-html';
-import { elementToSVG } from 'dom-to-svg';
 import parser from 'html-react-parser';
 import 'prism-themes/themes/prism-ghcolors.css';
 import { fromMarkdown } from 'mdast-util-from-markdown';
@@ -16,8 +15,8 @@ refractor.register(markdown);
 function App() {
   // const [Blocks, setBlocks] = React.useState();
   const [Data, setData] = React.useState('');
-  const test = React.useRef();
-
+  const [ComponentIDs, setComponentIDs] = React.useState(null);
+  const [Building, setBuilding] = React.useState(false);
   function CreateMarkdownEditor(data) {
     console.log(data);
     const items = refractor.highlight(data, 'markdown');
@@ -32,8 +31,8 @@ function App() {
     // This is how we read messages sent from the plugin controller
     window.onmessage = (event) => {
       const { type, message } = event.data.pluginMessage;
-      if (type === 'create-rectangles') {
-        console.log(`Figma Says: ${message}`);
+      if (type === 'Set-Ids') {
+        setComponentIDs(message.componentIDs);
       }
     };
     document.addEventListener('keypress', (e) => {
@@ -49,21 +48,31 @@ function App() {
       mdastExtensions: [gfmTaskListItemFromMarkdown],
     });
     if (Markdown.children.length == 0) return;
+    console.log(Markdown.children);
+    if (ComponentIDs) {
+      parent.postMessage(
+        {
+          pluginMessage: {
+            type: 'setMarkdown',
+            markdown: Markdown.children,
+            ids: ComponentIDs
+          },
+        },
+        '*'
+      );
+    }
+  }, [Data]);
+
+  function BuildDefault() {
+    setBuilding(true);
     parent.postMessage(
       {
         pluginMessage: {
-          type: 'setMarkdown',
-          markdown: Markdown.children,
+          type: 'buildDefault',
         },
       },
       '*'
     );
-  }, [Data]);
-  function getSVG() {
-    if (test) {
-      const svg = elementToSVG(test.current);
-      console.log(new XMLSerializer().serializeToString(svg));
-    }
   }
   return (
     <div>
@@ -81,10 +90,7 @@ function App() {
         }}
       />
 
-      <button onClick={getSVG}>Get SVG</button>
-      <p ref={test}>
-        This is text <code>This is code</code> see the difference
-      </p>
+      <button disabled={Building} onClick={BuildDefault}>Build Default</button>
     </div>
   );
 }

@@ -1,220 +1,418 @@
-import { clone } from '@figma-plugin/helpers';
 figma.showUI(__html__, { height: 850, width: 500 });
-
+let building = false;
 figma.ui.onmessage = async (msg) => {
+  if (msg.type == 'buildDefault' && !building) {
+    CreateDefaultComponents();
+  }
   if (msg.type == 'setMarkdown') {
+    if (msg.ids == null) return;
     let markdownData = {
       id: figma.currentPage.selection[0].id,
-      useDefault: msg.components == null ? true : false,
       markdown: msg.markdown,
+      ids: msg.ids,
     };
     BuildMarkdown(markdownData);
   }
-
-  async function BuildMarkdown(markdownData) {
-    let doc = figma.getNodeById(markdownData.id) as FrameNode;
-    try {
-      if (!doc) throw Error('Document does not exist');
-      if (markdownData.useDefault) {
-        //Load default font
-        await figma.loadFontAsync({ family: 'Inter', style: 'Regular' });
-        await figma.loadFontAsync({ family: 'Inter', style: 'Bold' });
-      }
-      //Remove all children to update according to the doc.
-      if (doc.children.length > 0) {
-        doc.children.forEach((element) => {
-          element.remove();
-        });
-      }
-    } catch (error) {
-      for (let i = 0; i < markdownData.markdown.length; i++) {
-        const block = markdownData.markdown[i];
-        switch (block.type) {
-          case 'heading':
-            switch (block.depth) {
-              case 1:
-                //Heading 1 Padding Frame settings
-                const h1Frame = figma.createFrame();
-                h1Frame.primaryAxisSizingMode = 'FIXED';
-                h1Frame.counterAxisSizingMode = 'AUTO';
-                h1Frame.layoutMode = 'HORIZONTAL';
-                h1Frame.layoutAlign = 'STRETCH';
-                h1Frame.name = 'Heading 1';
-                //Heading 1 settings
-                const h1 = figma.createText();
-                h1.fontSize = 32;
-                h1.layoutGrow = 1;
-                h1Frame.paddingBottom = 16;
-                h1.characters = block.children[0].value;
-                h1Frame.appendChild(h1);
-                doc.appendChild(h1Frame);
-                h1.name = 'value';
-                break;
-              case 2:
-                //Heading 1 Padding Frame settings
-                const h2Frame = figma.createFrame();
-                h2Frame.primaryAxisSizingMode = 'FIXED';
-                h2Frame.counterAxisSizingMode = 'AUTO';
-                h2Frame.layoutMode = 'HORIZONTAL';
-                h2Frame.layoutAlign = 'STRETCH';
-                h2Frame.name = 'Heading 2';
-                //Heading 1 settings
-                const h2 = figma.createText();
-                h2.fontSize = 28;
-                h2.layoutGrow = 1;
-                h2Frame.paddingBottom = 16;
-                h2.characters = block.children[0].value;
-                h2Frame.appendChild(h2);
-                doc.appendChild(h2Frame);
-                h2.name = '$value';
-                break;
-              case 3:
-                //Heading 1 Padding Frame settings
-                const h3Frame = figma.createFrame();
-                h3Frame.primaryAxisSizingMode = 'FIXED';
-                h3Frame.counterAxisSizingMode = 'AUTO';
-                h3Frame.layoutMode = 'HORIZONTAL';
-                h3Frame.layoutAlign = 'STRETCH';
-                h3Frame.name = 'Heading 3';
-                //Heading 1 settings
-                const h3 = figma.createText();
-                h3.fontSize = 20;
-                h3.layoutGrow = 1;
-                h3Frame.paddingBottom = 16;
-                h3.characters = block.children[0].value;
-                h3Frame.appendChild(h3);
-                doc.appendChild(h3Frame);
-                h3.name = '$value';
-                break;
-            }
-            break;
-          case 'paragraph':
-            //Paragraph frame
-            const pFrame = figma.createFrame();
-            pFrame.layoutMode = 'HORIZONTAL';
-            pFrame.primaryAxisSizingMode = 'FIXED';
-            pFrame.counterAxisSizingMode = 'AUTO';
-            pFrame.layoutMode = 'HORIZONTAL';
-            pFrame.layoutAlign = 'STRETCH';
-            pFrame.paddingBottom = 16;
-            pFrame.name = 'Paragraph';
-            //Paragraph text
-            const paragraph = figma.createText();
-            paragraph.fontSize = 16;
-            paragraph.characters = block.children[0].value;
-            pFrame.appendChild(paragraph);
-            doc.appendChild(pFrame);
-            break;
-          case 'thematicBreak':
-            //HR FRAME
-            const hrFrame = figma.createFrame();
-            hrFrame.layoutMode = 'HORIZONTAL';
-            hrFrame.primaryAxisSizingMode = 'FIXED';
-            hrFrame.layoutAlign = 'STRETCH';
-            hrFrame.layoutGrow = 0;
-            hrFrame.name = 'Horizontal Rule';
-            hrFrame.paddingBottom = 16;
-            hrFrame.paddingTop = 16;
-            hrFrame.resize(1, 1);
-            hrFrame.counterAxisSizingMode = 'AUTO';
-            //HR
-            const hr = figma.createFrame();
-            hr.layoutMode = 'HORIZONTAL';
-            hr.primaryAxisSizingMode = 'FIXED';
-            hr.counterAxisSizingMode = 'FIXED';
-            hr.layoutAlign = 'INHERIT';
-            hr.layoutGrow = 1;
-            hr.name = 'Fill';
-            const fills = clone(hr.fills);
-            fills[0].color.r = 210 / 255;
-            fills[0].color.b = 210 / 255;
-            fills[0].color.g = 210 / 255;
-            hr.fills = fills;
-            hr.resize(1, 1);
-            hrFrame.appendChild(hr);
-            doc.appendChild(hrFrame);
-            break;
-          default:
-            break;
-        }
-      }
-    }
-  }
 };
-
-function GetParagraph(data, Parent) {
-  //Create Paragraph
-  const Parapgrah = CreateType('Paragraph');
-  data.children.forEach((e) => {
-    GetTextType(e, Parapgrah);
-  });
-}
-
-function GetTextType(data, Parent) {
-  switch (data.type) {
-    case 'inlineCode':
-      break;
-    case 'emphasis':
-      break;
-    case 'strong':
-      break;
-    case 'link':
-      break;
-    default:
-      break; //Just plain text
-  }
-}
-
-async function CreateType(type: string) {
-  switch (type) {
-    case 'Paragraph':
-      const pFrame = figma.createFrame();
-      pFrame.layoutMode = 'HORIZONTAL';
-      pFrame.primaryAxisSizingMode = 'FIXED';
-      pFrame.counterAxisSizingMode = 'AUTO';
-      pFrame.layoutMode = 'HORIZONTAL';
-      pFrame.layoutAlign = 'STRETCH';
-      pFrame.paddingBottom = 16;
-      pFrame.name = 'Paragraph';
-      return pFrame;
-    case 'Heading':
-      return;
-    case 'thematicBreak':
-      return;
-    case 'list':
-      return;
-    case 'listItem':
-      return;
-    case 'HTML':
-    return;
-    case 'Blockqoute'
-  }
-}
 //@ts-ignore
-async function CreateText(text) {
-  const paragraphFrame = figma.createFrame();
-  paragraphFrame.layoutMode = 'VERTICAL';
-  paragraphFrame.counterAxisSizingMode = 'FIXED';
-  paragraphFrame.primaryAxisSizingMode = 'AUTO';
-  paragraphFrame.resize(400, 400);
+async function BuildMarkdown(markdownData) {
+  let doc = figma.getNodeById(markdownData.id) as FrameNode;
+  try {
+    if (!doc) throw Error('Document does not exist');
+    //Remove all children to update according to the doc.
+    if (doc.children.length > 0) {
+      doc.children.forEach((element) => {
+        element.remove();
+      });
+    }
+    for (let i = 0; i < markdownData.markdown.length; i++) {
+      const block = markdownData.markdown[i];
+      switch (block.type) {
+        case 'heading':
+          CreateHeading(block, doc, markdownData.ids);
+          break;
+        case 'paragraph':
+          CreateParagraph(block, doc, markdownData.ids);
+          break;
+        case 'thematicBreak':
+          break;
+        default:
+          break;
+      }
+    }
+  } catch (error) {}
+}
 
-  //Load fonts
-  await figma.loadFontAsync({ family: 'Inter', style: 'Regular' });
-
-  let words = text.split('');
-  let row = figma.createFrame();
-  row.itemSpacing = 0;
-  row.layoutMode = 'HORIZONTAL';
-  row.layoutAlign = 'STRETCH';
-  row.counterAxisSizingMode = 'AUTO';
-  for (let i = 0; i < words.length; i++) {
-    const word = words[i];
-    if (row.width < paragraphFrame.width) {
-      const wordText = figma.createText();
-      wordText.characters = word + ' ';
-      row.appendChild(wordText);
-    } else {
-      //make new row
+async function CreateHeading(block, Parent, ids) {
+  const headingComponent = figma.getNodeById(ids[`heading${block.depth}`]) as ComponentNode;
+  const instance = headingComponent.createInstance();
+  Parent.appendChild(instance);
+  let hasValue = false;
+  for (let i = 0; i < instance.children.length; i++) {
+    const node = instance.children[i];
+    if (node.name == 'value' && node.type == 'TEXT') {
+      if (typeof node.fontName == 'symbol') return; //Throw error;
+      await figma.loadFontAsync(node.fontName);
+      if (block.children[0].value == '') {
+        hasValue = false;
+      } else {
+        node.characters = block.children[0].value;
+        hasValue = true;
+      }
     }
   }
+  if (hasValue) {
+    instance.visible = true;
+  } else {
+    instance.visible = false;
+  }
+}
+
+async function CreateParagraph(block, Parent, ids) {
+  const paragraphComponent = figma.getNodeById(ids[`text`]) as ComponentNode;
+  const instance = paragraphComponent.createInstance();
+  Parent.appendChild(instance);
+  for (let i = 0; i < instance.children.length; i++) {
+    const node = instance.children[i];
+    if (node.name == 'value' && node.type == 'TEXT') {
+      if (typeof node.fontName == 'symbol') return; //Throw error;
+      await figma.loadFontAsync(node.fontName);
+      node.characters = block.children[0].value;
+    }
+  }
+}
+
+async function CreateDefaultComponents() {
+  building = true; // Prevent multiple components being built
+  let ComponentIDs = {};
+  //Load default fonts
+  const boldFont = { family: 'Inter', style: 'Bold' };
+  const defaultFont = { family: 'Inter', style: 'Regular' };
+  const italicFont = { family: 'Inter', style: 'Italic' };
+  const codeFont = { family: 'PT Mono', style: 'Regular' };
+  await figma.loadFontAsync(defaultFont); //Heading
+  await figma.loadFontAsync(boldFont); // Text
+  await figma.loadFontAsync(italicFont); //Qoute
+  await figma.loadFontAsync(codeFont); //Code
+
+  //Create Page for components
+  let componentPage = figma.createPage();
+  componentPage.name = '📃 Figma.md Components';
+  let Organizer = figma.createFrame();
+  Organizer.layoutMode = 'VERTICAL';
+  Organizer.resize(300, 100);
+  Organizer.primaryAxisSizingMode = 'AUTO';
+  Organizer.counterAxisSizingMode = 'FIXED';
+  Organizer.itemSpacing = 16;
+  Organizer.name = 'Markdown Component Styles';
+  componentPage.appendChild(Organizer);
+  //Generate Headings
+  for (let i = 0; i < 6; i++) {
+    let defaultSizes = [32, 28, 24, 20, 18, 16];
+    //Create frame for text to live in
+    const headingFrame = figma.createComponent();
+    headingFrame.layoutMode = 'HORIZONTAL';
+    headingFrame.paddingBottom = i < 4 ? 16 : 8;
+    headingFrame.primaryAxisSizingMode = 'FIXED';
+    headingFrame.counterAxisSizingMode = 'AUTO';
+    headingFrame.resize(200, 100);
+    headingFrame.layoutAlign = 'STRETCH';
+    headingFrame.name = `Heading ${i + 1}`;
+
+    // Create actual text
+    const heading = figma.createText();
+    if (i + 1 < 4) {
+      heading.fontName = boldFont;
+    }
+    heading.characters = `Heading ${i + 1}`;
+    heading.name = 'value';
+    heading.layoutGrow = 1;
+    heading.fontSize = defaultSizes[i];
+    headingFrame.addComponentProperty('value', 'TEXT', `Heading ${i + 1}`);
+    headingFrame.appendChild(heading);
+    Organizer.appendChild(headingFrame);
+    ComponentIDs[`heading${i + 1}`] = headingFrame.id;
+  }
+  //Create frame for text to live in
+  const codingFrame = figma.createComponent();
+  codingFrame.layoutMode = 'HORIZONTAL';
+  codingFrame.paddingLeft = 4;
+  codingFrame.paddingRight = 4;
+  codingFrame.cornerRadius = 2;
+  const codingBackgroundFill: SolidPaint = {
+    type: 'SOLID',
+    color: {
+      r: 240 / 255,
+      b: 240 / 255,
+      g: 240 / 255,
+    },
+    opacity: 1,
+    visible: true,
+  };
+
+  //Frame for code text to live in
+  codingFrame.primaryAxisSizingMode = 'FIXED';
+  codingFrame.counterAxisSizingMode = 'AUTO';
+  codingFrame.fills = [codingBackgroundFill];
+  codingFrame.primaryAxisAlignItems = 'CENTER';
+  codingFrame.counterAxisAlignItems = 'CENTER';
+  codingFrame.resize(200, 100);
+  codingFrame.layoutAlign = 'STRETCH';
+  codingFrame.name = `Inline Code`;
+
+  //CODE TEXT
+  const coding = figma.createText();
+  coding.fontName = codeFont;
+  coding.characters = `Inline Code`;
+  coding.layoutGrow = 1;
+  coding.fontSize = 16;
+  coding.name = 'value';
+  codingFrame.appendChild(coding);
+  Organizer.appendChild(codingFrame);
+  ComponentIDs['inlineCode'] = codingFrame.id;
+
+  //Block Qoute Code
+  const blockQuoteFrame = figma.createComponent();
+  blockQuoteFrame.layoutMode = 'HORIZONTAL';
+  blockQuoteFrame.primaryAxisSizingMode = 'FIXED';
+  blockQuoteFrame.counterAxisSizingMode = 'AUTO';
+  blockQuoteFrame.layoutAlign = 'STRETCH';
+  blockQuoteFrame.itemSpacing = 4;
+  blockQuoteFrame.paddingBottom = 16;
+  blockQuoteFrame.paddingTop = 16;
+
+  const blockQuoteAccent = figma.createFrame();
+  const accentFill: SolidPaint = {
+    type: 'SOLID',
+    color: {
+      r: 0.75,
+      b: 0.75,
+      g: 0.75,
+    },
+    opacity: 1,
+    visible: true,
+  };
+  blockQuoteAccent.fills = [accentFill];
+  blockQuoteAccent.resize(2, 100);
+  blockQuoteAccent.layoutAlign = 'STRETCH';
+  blockQuoteFrame.appendChild(blockQuoteAccent);
+  blockQuoteAccent.name = 'Accent';
+
+  const blockQuoteText = figma.createText();
+  blockQuoteText.fontName = italicFont;
+  blockQuoteText.layoutGrow = 1;
+  blockQuoteText.fontSize = 20;
+  blockQuoteText.characters = 'Block Quote';
+  blockQuoteText.name = 'value';
+
+  blockQuoteFrame.appendChild(blockQuoteText);
+  Organizer.appendChild(blockQuoteFrame);
+  ComponentIDs['blockQuote'] = blockQuoteFrame.id;
+
+  //Link Text
+  const linkFrame = figma.createComponent();
+  linkFrame.layoutMode = 'HORIZONTAL';
+  linkFrame.primaryAxisSizingMode = 'FIXED';
+  linkFrame.counterAxisSizingMode = 'AUTO';
+  linkFrame.primaryAxisAlignItems = 'CENTER';
+  linkFrame.counterAxisAlignItems = 'CENTER';
+  linkFrame.resize(200, 100);
+  linkFrame.layoutAlign = 'STRETCH';
+  linkFrame.name = `Link`;
+
+  //Link TEXT
+  const linkText = figma.createText();
+  const linkColor: SolidPaint = {
+    type: 'SOLID',
+    color: {
+      r: 87 / 255,
+      b: 197 / 255,
+      g: 132 / 255,
+    },
+    opacity: 1,
+    visible: true,
+  };
+  linkText.fontName = defaultFont;
+  linkText.characters = `Link`;
+  linkText.layoutGrow = 1;
+  linkText.fontSize = 16;
+  linkText.fills = [linkColor];
+  linkText.name = 'value';
+  linkFrame.appendChild(linkText);
+  Organizer.appendChild(linkFrame);
+  ComponentIDs['link'] = linkFrame.id;
+
+  //Strong Text
+  const strongFrame = figma.createComponent();
+  strongFrame.layoutMode = 'HORIZONTAL';
+  strongFrame.primaryAxisSizingMode = 'FIXED';
+  strongFrame.counterAxisSizingMode = 'AUTO';
+  strongFrame.primaryAxisAlignItems = 'CENTER';
+  strongFrame.counterAxisAlignItems = 'CENTER';
+  strongFrame.resize(200, 100);
+  strongFrame.layoutAlign = 'STRETCH';
+  strongFrame.name = `Link`;
+
+  //Strong TEXT
+  const strongText = figma.createText();
+  strongText.fontName = boldFont;
+  strongText.characters = `Strong`;
+  strongText.layoutGrow = 1;
+  strongText.fontSize = 16;
+  strongText.name = 'value';
+  strongFrame.appendChild(strongText);
+  Organizer.appendChild(strongFrame);
+  ComponentIDs['strong'] = strongFrame.id;
+
+  //Plain Text
+  const plainTextFrame = figma.createComponent();
+  plainTextFrame.layoutMode = 'HORIZONTAL';
+  plainTextFrame.primaryAxisSizingMode = 'FIXED';
+  plainTextFrame.counterAxisSizingMode = 'AUTO';
+  plainTextFrame.primaryAxisAlignItems = 'CENTER';
+  plainTextFrame.counterAxisAlignItems = 'CENTER';
+  plainTextFrame.resize(200, 100);
+  plainTextFrame.layoutAlign = 'STRETCH';
+  plainTextFrame.name = `Plain-text`;
+
+  //Plain TEXT
+  const plainText = figma.createText();
+  plainText.fontName = defaultFont;
+  plainText.characters = `Default Text`;
+  plainText.layoutGrow = 1;
+  plainText.fontSize = 16;
+  plainText.name = 'value';
+  plainTextFrame.appendChild(plainText);
+  Organizer.appendChild(plainTextFrame);
+  ComponentIDs['text'] = plainTextFrame.id;
+
+  //Emphasis Text
+  const emphasisFrame = figma.createComponent();
+  emphasisFrame.layoutMode = 'HORIZONTAL';
+  emphasisFrame.primaryAxisSizingMode = 'FIXED';
+  emphasisFrame.counterAxisSizingMode = 'AUTO';
+  emphasisFrame.primaryAxisAlignItems = 'CENTER';
+  emphasisFrame.counterAxisAlignItems = 'CENTER';
+  emphasisFrame.resize(200, 100);
+  emphasisFrame.layoutAlign = 'STRETCH';
+  emphasisFrame.name = `emphasis`;
+
+  //CODE TEXT
+  const emphasisText = figma.createText();
+  emphasisText.fontName = italicFont;
+  emphasisText.characters = `Emphasis`;
+  emphasisText.layoutGrow = 1;
+  emphasisText.fontSize = 16;
+  emphasisText.name = 'value';
+  emphasisFrame.appendChild(emphasisText);
+  Organizer.appendChild(emphasisFrame);
+  ComponentIDs['emphasis'] = emphasisFrame.id;
+
+  // Thematic break
+  const breakFrame = figma.createComponent();
+  breakFrame.layoutMode = 'HORIZONTAL';
+  breakFrame.primaryAxisSizingMode = 'FIXED';
+  breakFrame.counterAxisSizingMode = 'AUTO';
+  breakFrame.layoutAlign = 'STRETCH';
+  breakFrame.paddingBottom = 16;
+  breakFrame.paddingTop = 16;
+  breakFrame.name = 'Thematic-Break';
+
+  //Fill
+  const breakRule = figma.createFrame();
+  const breakFill: SolidPaint = {
+    type: 'SOLID',
+    color: {
+      r: 0.85,
+      b: 0.85,
+      g: 0.85,
+    },
+    opacity: 1,
+    visible: true,
+  };
+  breakRule.resize(100, 2);
+  breakRule.layoutGrow = 1;
+  breakRule.fills = [breakFill];
+  breakRule.name = 'Fill';
+  breakFrame.appendChild(breakRule);
+  Organizer.appendChild(breakFrame);
+  ComponentIDs['thematicBreak'] = breakFrame.id;
+
+  //Unordered List Item
+  const listItemFrame = figma.createComponent();
+  listItemFrame.layoutMode = 'HORIZONTAL';
+  listItemFrame.primaryAxisSizingMode = 'FIXED';
+  listItemFrame.counterAxisSizingMode = 'AUTO';
+  listItemFrame.counterAxisAlignItems = 'CENTER';
+  listItemFrame.layoutAlign = 'STRETCH';
+  listItemFrame.itemSpacing = 4;
+  listItemFrame.paddingBottom = 16;
+  listItemFrame.paddingTop = 16;
+
+  const listItemAccent = figma.createFrame();
+  const listAccentFill: SolidPaint = {
+    type: 'SOLID',
+    color: {
+      r: 0.75,
+      b: 0.75,
+      g: 0.75,
+    },
+    opacity: 1,
+    visible: true,
+  };
+  listItemAccent.fills = [listAccentFill];
+  listItemAccent.resize(8, 8);
+  listItemAccent.cornerRadius = 8;
+  listItemFrame.appendChild(listItemAccent);
+  listItemAccent.name = 'Accent';
+
+  const listItemText = figma.createText();
+  listItemText.fontName = defaultFont;
+  listItemText.layoutGrow = 1;
+  listItemText.fontSize = 16;
+  listItemText.characters = 'List Item';
+  listItemText.name = 'value';
+
+  listItemFrame.appendChild(listItemText);
+  Organizer.appendChild(listItemFrame);
+  ComponentIDs['unorderedList'] = listItemFrame.id;
+
+  //Ordered List Item
+  const orderedListItemFrame = figma.createComponent();
+  orderedListItemFrame.layoutMode = 'HORIZONTAL';
+  orderedListItemFrame.primaryAxisSizingMode = 'FIXED';
+  orderedListItemFrame.counterAxisSizingMode = 'AUTO';
+  orderedListItemFrame.counterAxisAlignItems = 'CENTER';
+  orderedListItemFrame.layoutAlign = 'STRETCH';
+  orderedListItemFrame.itemSpacing = 4;
+  orderedListItemFrame.paddingBottom = 16;
+  orderedListItemFrame.paddingTop = 16;
+
+  const orderedListItemNumber = figma.createText();
+  orderedListItemNumber.fontName = defaultFont;
+  orderedListItemNumber.layoutGrow = 0;
+  orderedListItemNumber.fontSize = 16;
+  orderedListItemNumber.characters = '1.';
+  orderedListItemNumber.name = 'index-value';
+
+  const orderedListItemText = figma.createText();
+  orderedListItemText.fontName = defaultFont;
+  orderedListItemText.layoutGrow = 1;
+  orderedListItemText.fontSize = 16;
+  orderedListItemText.characters = 'Ordered List Item';
+  orderedListItemText.name = 'value';
+
+  orderedListItemFrame.appendChild(orderedListItemNumber);
+  orderedListItemFrame.appendChild(orderedListItemText);
+  Organizer.appendChild(orderedListItemFrame);
+  ComponentIDs['orderedList'] = orderedListItemFrame.id;
+
+  //TODO Add checkbox and ``` Code snippets```
+
+  figma.ui.postMessage({
+    type: 'Set-Ids',
+    message: {
+      componentIDs: ComponentIDs,
+    },
+  });
 }

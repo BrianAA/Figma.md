@@ -1,7 +1,7 @@
 figma.showUI(__html__, { height: 850, width: 500 });
-let building = false;
+
 figma.ui.onmessage = async (msg) => {
-  if (msg.type == 'buildDefault' && !building) {
+  if (msg.type == 'buildDefault') {
     CreateDefaultComponents();
   }
   if (msg.type == 'setMarkdown') {
@@ -21,23 +21,34 @@ async function BuildMarkdown(markdownData) {
     if (!doc) throw Error('Document does not exist');
     //Remove all children to update according to the doc.
     if (doc.children.length > 0) {
-      doc.children.forEach((element) => {
-        element.remove();
-      });
-    }
-    for (let i = 0; i < markdownData.markdown.length; i++) {
-      const block = markdownData.markdown[i];
-      switch (block.type) {
-        case 'heading':
-          CreateHeading(block, doc, markdownData.ids);
-          break;
-        case 'paragraph':
-          CreateParagraph(block, doc, markdownData.ids);
-          break;
-        case 'thematicBreak':
-          break;
-        default:
-          break;
+      for (let i = 0; i < doc.children.length; i++) {
+        const node = doc.children[i];
+        if (node.type != 'INSTANCE') return;
+        const mainId = node.mainComponent.id;
+        for (let key in markdownData.ids) {
+          if (markdownData.ids[key] == mainId) {
+            const valueNode = node.findChild((child) => child.name == 'value');
+            if (valueNode.type == 'TEXT') {
+              valueNode.characters = markdownData.markdown[i].children[0].value;
+            }
+          }
+        }
+      }
+    } else {
+      for (let i = 0; i < markdownData.markdown.length; i++) {
+        const block = markdownData.markdown[i];
+        switch (block.type) {
+          case 'heading':
+            CreateHeading(block, doc, markdownData.ids);
+            break;
+          case 'paragraph':
+            CreateParagraph(block, doc, markdownData.ids);
+            break;
+          case 'thematicBreak':
+            break;
+          default:
+            break;
+        }
       }
     }
   } catch (error) {}
@@ -46,6 +57,7 @@ async function BuildMarkdown(markdownData) {
 async function CreateHeading(block, Parent, ids) {
   const headingComponent = figma.getNodeById(ids[`heading${block.depth}`]) as ComponentNode;
   const instance = headingComponent.createInstance();
+  instance.name = `Heading ${block.depth}`;
   Parent.appendChild(instance);
   let hasValue = false;
   for (let i = 0; i < instance.children.length; i++) {
@@ -83,7 +95,6 @@ async function CreateParagraph(block, Parent, ids) {
 }
 
 async function CreateDefaultComponents() {
-  building = true; // Prevent multiple components being built
   let ComponentIDs = {};
   //Load default fonts
   const boldFont = { family: 'Inter', style: 'Bold' };

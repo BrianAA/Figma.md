@@ -49,6 +49,7 @@ function App() {
     });
     if (Markdown.children.length == 0) return;
     console.log(Markdown.children);
+    console.log(ComponentIDs)
     if (ComponentIDs) {
       parent.postMessage(
         {

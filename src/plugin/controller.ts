@@ -17,48 +17,81 @@ figma.ui.onmessage = async (msg) => {
 //@ts-ignore
 async function BuildMarkdown(markdownData) {
   let doc = figma.getNodeById(markdownData.id) as FrameNode;
+  let blocks = markdownData.markdown; // markdown data
+  let ids = markdownData.ids; //markdown components
   try {
     if (!doc) throw Error('Document does not exist');
-    //Remove all children to update according to the doc.
-    if (doc.children.length > 0) {
-      for (let i = 0; i < doc.children.length; i++) {
-        const node = doc.children[i];
-        if (node.type != 'INSTANCE') return;
-        const mainId = node.mainComponent.id;
-        for (let key in markdownData.ids) {
-          if (markdownData.ids[key] == mainId) {
-            const valueNode = node.findChild((child) => child.name == 'value');
-            if (valueNode.type == 'TEXT') {
-              valueNode.characters = markdownData.markdown[i].children[0].value;
-            }
-          }
-        }
-      }
-    } else {
-      for (let i = 0; i < markdownData.markdown.length; i++) {
-        const block = markdownData.markdown[i];
-        switch (block.type) {
-          case 'heading':
-            CreateHeading(block, doc, markdownData.ids);
-            break;
-          case 'paragraph':
-            CreateParagraph(block, doc, markdownData.ids);
-            break;
-          case 'thematicBreak':
-            break;
-          default:
-            break;
+    //Remaining blocks if there are new ones
+    for (let i = 0; i < blocks.length; i++) {
+      const block = blocks[i];
+      let existingChild = doc.children[i];
+      if (existingChild) {
+        if (existingChild.type != 'INSTANCE') {
+          existingChild.remove();
+          const markdownComponent = await CreateBlockType(block, ids);
+          doc.appendChild(markdownComponent);
+        } else {
+          const blockID = ids[block.type];
+          const component = figma.getNodeById(blockID) as ComponentNode;
+          existingChild.swapComponent(component);
+          const value = existingChild.findChild((node) => node.name == 'value');
+          if (value.type != 'TEXT') throw Error('Value in component is not of the type TEXT');
+          if (typeof value.fontName == 'symbol') throw Error('Value fonts are mixed');
+          await figma.loadFontAsync(value.fontName);
+          value.characters = block.children[0].value;
         }
       }
     }
-  } catch (error) {}
+  } catch (error) {
+    console.log(error);
+    figma.notify(error, { error: true });
+  }
 }
 
-async function CreateHeading(block, Parent, ids) {
+/**
+ * Takes in a instance main component ID and matches to markdown Component
+ * @param instance_mainComponentID
+ * @param ids
+ * @returns Matching ID in markdown components
+ */
+function GetMatchingMarkdownComponentByID(instance_mainComponentID, ids) {
+  let match = null;
+  for (let key in ids) {
+    const markdownID = ids[key];
+    if (markdownID == instance_mainComponentID) {
+      match = key;
+    }
+  }
+  return match;
+}
+
+async function CreateBlockType(block, ids) {
+  switch (block.type) {
+    case 'heading':
+      return await CreateHeading(block, ids);
+    case 'paragraph':
+      return await CreateParagraph(block, ids);
+    case 'thematicBreak':
+    default:
+      break;
+  }
+}
+function GetMatchingMarkdownTypeByType(block, ids) {
+  switch (block.type) {
+    case 'heading':
+      return ids[`headings${block.depth}`];
+    case 'paragraph':
+      return ids.text;
+    case 'thematicBreak':
+      return ids.thematicBreak;
+    case 'link':
+      return ids.link;
+  }
+}
+async function CreateHeading(block, ids) {
   const headingComponent = figma.getNodeById(ids[`heading${block.depth}`]) as ComponentNode;
   const instance = headingComponent.createInstance();
   instance.name = `Heading ${block.depth}`;
-  Parent.appendChild(instance);
   let hasValue = false;
   for (let i = 0; i < instance.children.length; i++) {
     const node = instance.children[i];
@@ -78,12 +111,12 @@ async function CreateHeading(block, Parent, ids) {
   } else {
     instance.visible = false;
   }
+  return instance;
 }
 
-async function CreateParagraph(block, Parent, ids) {
+async function CreateParagraph(block, ids) {
   const paragraphComponent = figma.getNodeById(ids[`text`]) as ComponentNode;
   const instance = paragraphComponent.createInstance();
-  Parent.appendChild(instance);
   for (let i = 0; i < instance.children.length; i++) {
     const node = instance.children[i];
     if (node.name == 'value' && node.type == 'TEXT') {
@@ -92,6 +125,7 @@ async function CreateParagraph(block, Parent, ids) {
       node.characters = block.children[0].value;
     }
   }
+  return instance;
 }
 
 async function CreateDefaultComponents() {

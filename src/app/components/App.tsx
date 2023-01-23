@@ -15,7 +15,6 @@ refractor.register(markdown);
 function App() {
   // const [Blocks, setBlocks] = React.useState();
   const [Data, setData] = React.useState('');
-  const [ComponentIDs, setComponentIDs] = React.useState(null);
   const [Building, setBuilding] = React.useState(false);
   function CreateMarkdownEditor(data) {
     console.log(data);
@@ -29,12 +28,9 @@ function App() {
   }
   React.useEffect(() => {
     // This is how we read messages sent from the plugin controller
-    window.onmessage = (event) => {
-      const { type, message } = event.data.pluginMessage;
-      if (type === 'Set-Ids') {
-        setComponentIDs(message.componentIDs);
-      }
-    };
+    // window.onmessage = (event) => {
+    //   const { type, message } = event.data.pluginMessage;
+    // };
     document.addEventListener('keypress', (e) => {
       if (e.key == 'Delete') {
         setData('');
@@ -49,19 +45,15 @@ function App() {
     });
     if (Markdown.children.length == 0) return;
     console.log(Markdown.children);
-    console.log(ComponentIDs)
-    if (ComponentIDs) {
-      parent.postMessage(
-        {
-          pluginMessage: {
-            type: 'setMarkdown',
-            markdown: Markdown.children,
-            ids: ComponentIDs
-          },
+    parent.postMessage(
+      {
+        pluginMessage: {
+          type: 'setMarkdown',
+          markdown: Markdown.children,
         },
-        '*'
-      );
-    }
+      },
+      '*'
+    );
   }, [Data]);
 
   function BuildDefault() {

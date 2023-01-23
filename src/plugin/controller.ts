@@ -5,11 +5,9 @@ figma.ui.onmessage = async (msg) => {
     CreateDefaultComponents();
   }
   if (msg.type == 'setMarkdown') {
-    if (msg.ids == null) return;
     let markdownData = {
       id: figma.currentPage.selection[0].id,
       markdown: msg.markdown,
-      ids: msg.ids,
     };
     BuildMarkdown(markdownData);
   }
@@ -18,28 +16,30 @@ figma.ui.onmessage = async (msg) => {
 async function BuildMarkdown(markdownData) {
   let doc = figma.getNodeById(markdownData.id) as FrameNode;
   let blocks = markdownData.markdown; // markdown data
-  let ids = markdownData.ids; //markdown components
+  let storedIDs = figma.root.getPluginData('componentIDs');
+  let ids; //markdown components
+  if (!storedIDs) {
+    ids = await CreateDefaultComponents();
+  } else {
+    ids = JSON.parse(storedIDs);
+  }
   try {
     if (!doc) throw Error('Document does not exist');
+
     //Remaining blocks if there are new ones
     for (let i = 0; i < blocks.length; i++) {
       const block = blocks[i];
-      let existingChild = doc.children[i];
+      const existingChild = doc.children[i];
       if (existingChild) {
-        if (existingChild.type != 'INSTANCE') {
-          existingChild.remove();
-          const markdownComponent = await CreateBlockType(block, ids);
-          doc.appendChild(markdownComponent);
-        } else {
-          const blockID = ids[block.type];
-          const component = figma.getNodeById(blockID) as ComponentNode;
-          existingChild.swapComponent(component);
-          const value = existingChild.findChild((node) => node.name == 'value');
-          if (value.type != 'TEXT') throw Error('Value in component is not of the type TEXT');
-          if (typeof value.fontName == 'symbol') throw Error('Value fonts are mixed');
-          await figma.loadFontAsync(value.fontName);
-          value.characters = block.children[0].value;
+        if (existingChild.type == 'INSTANCE') {
+          const markdownType = GetMarkdownType(block);
+          const _newMainComponent = figma.getNodeById(ids[markdownType]) as ComponentNode;
+          existingChild.swapComponent(_newMainComponent);
+          SetText(existingChild, block);
         }
+      } else {
+        console.log('Creating component');
+        await CreateBlockType(block, ids, doc);
       }
     }
   } catch (error) {
@@ -48,75 +48,28 @@ async function BuildMarkdown(markdownData) {
   }
 }
 
-/**
- * Takes in a instance main component ID and matches to markdown Component
- * @param instance_mainComponentID
- * @param ids
- * @returns Matching ID in markdown components
- */
-function GetMatchingMarkdownComponentByID(instance_mainComponentID, ids) {
-  let match = null;
-  for (let key in ids) {
-    const markdownID = ids[key];
-    if (markdownID == instance_mainComponentID) {
-      match = key;
-    }
-  }
-  return match;
-}
-
-async function CreateBlockType(block, ids) {
-  switch (block.type) {
-    case 'heading':
-      return await CreateHeading(block, ids);
-    case 'paragraph':
-      return await CreateParagraph(block, ids);
-    case 'thematicBreak':
-    default:
-      break;
-  }
-}
-function GetMatchingMarkdownTypeByType(block, ids) {
-  switch (block.type) {
-    case 'heading':
-      return ids[`headings${block.depth}`];
-    case 'paragraph':
-      return ids.text;
-    case 'thematicBreak':
-      return ids.thematicBreak;
-    case 'link':
-      return ids.link;
-  }
-}
-async function CreateHeading(block, ids) {
-  const headingComponent = figma.getNodeById(ids[`heading${block.depth}`]) as ComponentNode;
-  const instance = headingComponent.createInstance();
-  instance.name = `Heading ${block.depth}`;
-  let hasValue = false;
-  for (let i = 0; i < instance.children.length; i++) {
-    const node = instance.children[i];
-    if (node.name == 'value' && node.type == 'TEXT') {
-      if (typeof node.fontName == 'symbol') return; //Throw error;
-      await figma.loadFontAsync(node.fontName);
-      if (block.children[0].value == '') {
-        hasValue = false;
-      } else {
-        node.characters = block.children[0].value;
-        hasValue = true;
-      }
-    }
-  }
-  if (hasValue) {
-    instance.visible = true;
-  } else {
-    instance.visible = false;
+async function CreateBlockType(block, ids, parent) {
+  const _markdownType = GetMarkdownType(block);
+  const ComponentNode = figma.getNodeById(ids[_markdownType]) as ComponentNode;
+  const instance = ComponentNode.createInstance();
+  parent.appendChild(instance);
+  instance.name = `${_markdownType}`;
+  instance.layoutAlign = 'STRETCH';
+  if (block.type != 'thematicBreak') {
+    await SetText(instance, block);
   }
   return instance;
 }
 
-async function CreateParagraph(block, ids) {
-  const paragraphComponent = figma.getNodeById(ids[`text`]) as ComponentNode;
-  const instance = paragraphComponent.createInstance();
+function GetMarkdownType(block) {
+  if (block.type == 'heading') {
+    return `heading${block.depth}`;
+  } else {
+    return block.type;
+  }
+}
+
+async function SetText(instance, block) {
   for (let i = 0; i < instance.children.length; i++) {
     const node = instance.children[i];
     if (node.name == 'value' && node.type == 'TEXT') {
@@ -125,7 +78,6 @@ async function CreateParagraph(block, ids) {
       node.characters = block.children[0].value;
     }
   }
-  return instance;
 }
 
 async function CreateDefaultComponents() {
@@ -329,7 +281,7 @@ async function CreateDefaultComponents() {
   plainText.name = 'value';
   plainTextFrame.appendChild(plainText);
   Organizer.appendChild(plainTextFrame);
-  ComponentIDs['text'] = plainTextFrame.id;
+  ComponentIDs['paragraph'] = plainTextFrame.id;
 
   //Emphasis Text
   const emphasisFrame = figma.createComponent();
@@ -453,11 +405,8 @@ async function CreateDefaultComponents() {
   ComponentIDs['orderedList'] = orderedListItemFrame.id;
 
   //TODO Add checkbox and ``` Code snippets```
-
-  figma.ui.postMessage({
-    type: 'Set-Ids',
-    message: {
-      componentIDs: ComponentIDs,
-    },
-  });
+  //Store keys
+  const root = figma.root;
+  root.setPluginData('componentIDs', JSON.stringify(ComponentIDs));
+  return ComponentIDs;
 }

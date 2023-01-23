@@ -1,18 +1,91 @@
 figma.showUI(__html__, { height: 850, width: 500 });
 
+figma.on('selectionchange', async () => {});
+
 figma.ui.onmessage = async (msg) => {
-  if (msg.type == 'buildDefault') {
-    CreateDefaultComponents();
-  }
-  if (msg.type == 'setMarkdown') {
-    let markdownData = {
-      id: figma.currentPage.selection[0].id,
-      markdown: msg.markdown,
-    };
-    BuildMarkdown(markdownData);
+  switch (msg.type) {
+    case 'buildDefault':
+      CreateDefaultComponents();
+      break;
+    case 'setMarkdown':
+      let markdownData = {
+        id: figma.currentPage.selection[0].id,
+        markdown: msg.markdown,
+      };
+      BuildMarkdown(markdownData);
+      break;
+    case 'loadMarkDown':
+      const selection = figma.currentPage.children[0];
+      if (selection.type == 'FRAME') {
+        const data = await GetMarkdown(figma.currentPage.selection[0].id);
+        figma.ui.postMessage({
+          type: 'loadMarkdown',
+          message: data,
+        });
+      }
+      break;
+    default:
+      break;
   }
 };
-//@ts-ignore
+
+async function GetMarkdown(docID) {
+  try {
+    const storedIDs = figma.root.getPluginData('componentIDs');
+    const componentIDs = JSON.parse(storedIDs);
+    const doc = figma.getNodeById(docID) as FrameNode;
+    let markdownData = '';
+
+    for (let i = 0; i < doc.children.length; i++) {
+      const child = doc.children[i];
+
+      if (child.type == 'INSTANCE') {
+        const mainID = child.mainComponent.id;
+        for (let key in componentIDs) {
+          const compareID = componentIDs[key];
+          if (compareID == mainID) {
+            switch (key) {
+              case 'heading1':
+                markdownData = markdownData + `\n# ${await GetText(child)} \n`;
+                break;
+              case 'heading2':
+                markdownData = markdownData + `\n## ${await GetText(child)} \n`;
+                break;
+              case 'heading3':
+                markdownData = markdownData + `\n### ${await GetText(child)} \n`;
+                break;
+              case 'heading4':
+                markdownData = markdownData + `\n#### ${await GetText(child)} \n`;
+                break;
+              case 'heading5':
+                markdownData = markdownData + `\n##### ${await GetText(child)} \n`;
+                break;
+              case 'heading5':
+                markdownData = markdownData + `\n###### ${await GetText(child)} \n`;
+                break;
+              case 'paragraph':
+                markdownData = markdownData + `\n${await GetText(child)} \n`;
+                break;
+              case 'thematicBreak':
+                markdownData = markdownData + `\n--- \n`;
+              case 'link':
+                markdownData = markdownData;
+              default:
+                break;
+            }
+          }
+        }
+      } else {
+        child.remove();
+        i = i - 1;
+      }
+    }
+    return markdownData;
+  } catch (error) {
+    console.log(error);
+  }
+}
+
 async function BuildMarkdown(markdownData) {
   let doc = figma.getNodeById(markdownData.id) as FrameNode;
   let blocks = markdownData.markdown; // markdown data
@@ -25,7 +98,12 @@ async function BuildMarkdown(markdownData) {
   }
   try {
     if (!doc) throw Error('Document does not exist');
-
+    while (blocks.length < doc.children.length) {
+      for (let c = blocks.length - 1; doc.children.length; c++) {
+        const child = doc.children[c];
+        child.remove();
+      }
+    }
     //Remaining blocks if there are new ones
     for (let i = 0; i < blocks.length; i++) {
       const block = blocks[i];
@@ -34,14 +112,30 @@ async function BuildMarkdown(markdownData) {
         if (existingChild.type == 'INSTANCE') {
           const markdownType = GetMarkdownType(block);
           const _newMainComponent = figma.getNodeById(ids[markdownType]) as ComponentNode;
-          existingChild.swapComponent(_newMainComponent);
-          SetText(existingChild, block);
+          if (_newMainComponent) {
+            existingChild.swapComponent(_newMainComponent);
+            existingChild.name = _newMainComponent.name;
+            SetText(existingChild, block);
+          }
         }
       } else {
         console.log('Creating component');
         await CreateBlockType(block, ids, doc);
       }
     }
+
+    // if (doc.children.length > blocks.length) {
+    //   doc.children.forEach((element, i) => {
+    //     if (element.type == 'INSTANCE') {
+    //       const mainID = element.mainComponent.id;
+    //       for (let key in ids) {
+    //         if (ids[key] == mainID && i > blocks.length) {
+    //           element.remove();
+    //         }
+    //       }
+    //     }
+    //   });
+    // }
   } catch (error) {
     console.log(error);
     figma.notify(error, { error: true });
@@ -49,16 +143,15 @@ async function BuildMarkdown(markdownData) {
 }
 
 async function CreateBlockType(block, ids, parent) {
-  const _markdownType = GetMarkdownType(block);
-  const ComponentNode = figma.getNodeById(ids[_markdownType]) as ComponentNode;
-  const instance = ComponentNode.createInstance();
-  parent.appendChild(instance);
-  instance.name = `${_markdownType}`;
-  instance.layoutAlign = 'STRETCH';
-  if (block.type != 'thematicBreak') {
-    await SetText(instance, block);
+  if (block.type != 'html') {
+    const _markdownType = GetMarkdownType(block);
+    const ComponentNode = figma.getNodeById(ids[_markdownType]) as ComponentNode;
+    const instance = ComponentNode.createInstance();
+    parent.appendChild(instance);
+    instance.name = `${_markdownType}`;
+    instance.layoutAlign = 'STRETCH';
+    return instance;
   }
-  return instance;
 }
 
 function GetMarkdownType(block) {
@@ -76,6 +169,17 @@ async function SetText(instance, block) {
       if (typeof node.fontName == 'symbol') return; //Throw error;
       await figma.loadFontAsync(node.fontName);
       node.characters = block.children[0].value;
+    }
+  }
+}
+
+async function GetText(instance) {
+  for (let i = 0; i < instance.children.length; i++) {
+    const node = instance.children[i];
+    if (node.name == 'value' && node.type == 'TEXT') {
+      if (typeof node.fontName == 'symbol') return; //Throw error;
+      await figma.loadFontAsync(node.fontName);
+      return node.characters;
     }
   }
 }

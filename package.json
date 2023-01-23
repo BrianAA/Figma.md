@@ -11,6 +11,7 @@
   "dependencies": {
     "@figma-plugin/helpers": "^0.15.2",
     "dom-to-svg": "^0.12.2",
+    "hast-util-from-html": "^1.0.1",
     "hast-util-to-html": "^8.0.4",
     "html-react-parser": "^3.0.7",
     "mdast-util-from-markdown": "^1.2.0",

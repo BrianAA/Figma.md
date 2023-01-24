@@ -1,6 +1,13 @@
 figma.showUI(__html__, { height: 850, width: 500 });
-
-figma.on('selectionchange', async () => {});
+const codeBackground = `█`; //used to create a background fill for inline code
+figma.on('selectionchange', async () => {
+  const text = figma.currentPage.selection[0];
+  if (text.type == 'TEXT') {
+    console.log(
+      text.getStyledTextSegments(['fills', 'fontName', 'fontSize', 'fontWeight', 'hyperlink', 'textDecoration'])
+    );
+  }
+});
 
 figma.ui.onmessage = async (msg) => {
   switch (msg.type) {
@@ -115,7 +122,7 @@ async function BuildMarkdown(markdownData) {
           if (_newMainComponent) {
             existingChild.swapComponent(_newMainComponent);
             existingChild.name = _newMainComponent.name;
-            SetText(existingChild, block);
+            SetText(existingChild, block, ids);
           }
         }
       } else {
@@ -162,13 +169,50 @@ function GetMarkdownType(block) {
   }
 }
 
-async function SetText(instance, block) {
+//This is a paragraphy with `code` and inline [link](www.google.com) and *emph* and **bold**
+async function SetText(instance, block, ids) {
   for (let i = 0; i < instance.children.length; i++) {
     const node = instance.children[i];
     if (node.name == 'value' && node.type == 'TEXT') {
-      if (typeof node.fontName == 'symbol') return; //Throw error;
-      await figma.loadFontAsync(node.fontName);
-      node.characters = block.children[0].value;
+      const textSegments = node.getStyledTextSegments([
+        'fills',
+        'fontName',
+        'fontSize',
+        'fontWeight',
+        'hyperlink',
+        'textDecoration',
+      ]);
+      if (typeof node.fontName == 'symbol') {
+        for (let f = 0; f < textSegments.length; f++) {
+          await figma.loadFontAsync(textSegments[f].fontName);
+        }
+      } else {
+        await figma.loadFontAsync(node.fontName);
+      }
+
+      let fullParagraph = '';
+
+      block.children.forEach((child) => {
+        if (child.type == 'link') {
+          fullParagraph = fullParagraph + child.children[0].value + ' ';
+        } else {
+          fullParagraph = fullParagraph + child.value + ' ';
+        }
+        if (child.hyperlink) {
+          const Component = figma.getNodeById(ids['link']) as ComponentNode;
+          const _componentTextNode = Component.findChild(
+            (child) => child.type == 'TEXT' && child.name == 'value'
+          ) as TextNode;
+          node.setRangeHyperLink(child.position.start, child.end, block, block.url);
+          node.setRangeFills(child.start, child.end, _componentTextNode.fills);
+          node.setRangeFontName(child.start, child.end, _componentTextNode.fontName);
+        }
+      });
+
+      block.children.forEach((segment) => {
+        //hyperlink
+      });
+      node.characters = fullParagraph;
     }
   }
 }
@@ -237,9 +281,6 @@ async function CreateDefaultComponents() {
   //Create frame for text to live in
   const codingFrame = figma.createComponent();
   codingFrame.layoutMode = 'HORIZONTAL';
-  codingFrame.paddingLeft = 4;
-  codingFrame.paddingRight = 4;
-  codingFrame.cornerRadius = 2;
   const codingBackgroundFill: SolidPaint = {
     type: 'SOLID',
     color: {
@@ -254,7 +295,6 @@ async function CreateDefaultComponents() {
   //Frame for code text to live in
   codingFrame.primaryAxisSizingMode = 'FIXED';
   codingFrame.counterAxisSizingMode = 'AUTO';
-  codingFrame.fills = [codingBackgroundFill];
   codingFrame.primaryAxisAlignItems = 'CENTER';
   codingFrame.counterAxisAlignItems = 'CENTER';
   codingFrame.resize(200, 100);
@@ -263,12 +303,23 @@ async function CreateDefaultComponents() {
 
   //CODE TEXT
   const coding = figma.createText();
+  const codingFill = figma.createText();
   coding.fontName = codeFont;
-  coding.characters = `Inline Code`;
+  codingFill.fontName = codeFont;
+  coding.characters = ` Inline Code `;
+
   coding.layoutGrow = 1;
   coding.fontSize = 16;
   coding.name = 'value';
+  codingFill.name = `Inline Code fill (Only change the color)`;
+  codingFrame.appendChild(codingFill);
   codingFrame.appendChild(coding);
+  codingFill.layoutPositioning = 'ABSOLUTE';
+  codingFill.fills = [codingBackgroundFill];
+  codingFill.x = 0;
+  codingFill.y = 0;
+  codingFill.fontSize = 16;
+  codingFill.characters = `█████████████`;
   Organizer.appendChild(codingFrame);
   ComponentIDs['inlineCode'] = codingFrame.id;
 

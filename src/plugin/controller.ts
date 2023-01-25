@@ -150,7 +150,7 @@ async function BuildMarkdown(markdownData) {
 }
 
 async function CreateBlockType(block, ids, parent) {
-  if (block.type != 'html') {
+  if (block.type != 'html' && block.type == 'inlineCode') {
     const _markdownType = GetMarkdownType(block);
     const ComponentNode = figma.getNodeById(ids[_markdownType]) as ComponentNode;
     const instance = ComponentNode.createInstance();
@@ -158,6 +158,7 @@ async function CreateBlockType(block, ids, parent) {
     instance.name = `${_markdownType}`;
     instance.layoutAlign = 'STRETCH';
     return instance;
+  } else if (block.type == 'inlineCode') {
   }
 }
 
@@ -171,17 +172,25 @@ function GetMarkdownType(block) {
 
 //This is a paragraphy with `code` and inline [link](www.google.com) and *emph* and **bold**
 async function SetText(instance, block, ids) {
+  //Search through children
   for (let i = 0; i < instance.children.length; i++) {
     const node = instance.children[i];
+    //find child that meet these requirements
     if (node.name == 'value' && node.type == 'TEXT') {
+      //Pull all the segments if there are any before modifying
       const textSegments = node.getStyledTextSegments([
         'fills',
         'fontName',
         'fontSize',
         'fontWeight',
         'hyperlink',
+        'lineHeight',
+        'letterSpacing',
         'textDecoration',
+        'textCase',
       ]);
+
+      //If its a type of symbol iterate through the font
       if (typeof node.fontName == 'symbol') {
         for (let f = 0; f < textSegments.length; f++) {
           await figma.loadFontAsync(textSegments[f].fontName);
@@ -190,30 +199,105 @@ async function SetText(instance, block, ids) {
         await figma.loadFontAsync(node.fontName);
       }
 
+      //Full text of each item in the paragraph block
       let fullParagraph = '';
 
-      block.children.forEach((child) => {
-        if (child.type == 'link') {
-          fullParagraph = fullParagraph + child.children[0].value + ' ';
+      block.children.forEach(async (child) => {
+        let start = fullParagraph.length;
+        let end = fullParagraph.length;
+        console.log(child);
+        if (child.type != 'text' && child.type != 'inlineCode') {
+          fullParagraph = fullParagraph + child.children[0].value;
+          end = fullParagraph.length;
         } else {
-          fullParagraph = fullParagraph + child.value + ' ';
+          fullParagraph = fullParagraph + child.value;
+          end = fullParagraph.length;
         }
-        if (child.hyperlink) {
+        node.characters = fullParagraph;
+        if (child.type == 'link') {
           const Component = figma.getNodeById(ids['link']) as ComponentNode;
           const _componentTextNode = Component.findChild(
             (child) => child.type == 'TEXT' && child.name == 'value'
           ) as TextNode;
-          node.setRangeHyperLink(child.position.start, child.end, block, block.url);
-          node.setRangeFills(child.start, child.end, _componentTextNode.fills);
-          node.setRangeFontName(child.start, child.end, _componentTextNode.fontName);
+          node.setRangeHyperlink(start, end, { type: 'URL', value: child.url });
+          ApplyTextStyles(start, end, _componentTextNode, node);
+        } else if (child.type == 'inlineCode') {
+          const CodingComponent = figma.getNodeById(ids['inlineCode']) as ComponentNode;
+          instance.swapComponent(CodingComponent);
+          instance.name = 'paragraph+inlineCode';
+          const _componentTextNode = CodingComponent.findChild(
+            (child) => child.type == 'TEXT' && child.name == 'value'
+          ) as TextNode;
+          const _fillNode = CodingComponent.findChild(
+            (child) => child.type == 'TEXT' && child.name == 'Inline Code fill (Only change the color)'
+          ) as TextNode;
+          ApplyTextStyles(start, end, _componentTextNode, node);
+          ApplyCodeFill(start, child.value, node, _fillNode);
+        } else {
+          const Component = figma.getNodeById(ids[child.type == 'text' ? 'paragraph' : child.type]) as ComponentNode;
+          const _componentTextNode = Component.findChild(
+            (child) => child.type == 'TEXT' && child.name == 'value'
+          ) as TextNode;
+          ApplyTextStyles(start, end, _componentTextNode, node);
         }
       });
-
-      block.children.forEach((segment) => {
-        //hyperlink
-      });
-      node.characters = fullParagraph;
     }
+  }
+}
+
+async function ApplyCodeFill(start, value, node, fillNode) {
+  const textSegments = node.getStyledTextSegments([
+    'fills',
+    'fontName',
+    'fontSize',
+    'fontWeight',
+    'hyperlink',
+    'lineHeight',
+    'letterSpacing',
+    'textDecoration',
+    'textCase',
+  ]);
+
+  let fillText = BuildCodeFill(value);
+  let newText = ReplaceAt(start, fillText, node.characters);
+  console.log(newText);
+  fillNode.characters = newText;
+  console.log(textSegments);
+  // textSegments.forEach(async (segment) => {
+  //   await figma.loadFontAsync(segment.fontName);
+  //   fillNode.setRangeFontName(segment.start, segment.end, segment.fontName);
+  //   fillNode.setRangeFontSize(segment.start, segment.end, segment.fontSize);
+  //   fillNode.setRangeLetterSpacing(segment.start, segment.end, segment.letterSpacing);
+  //   fillNode.setRangeLineHeight(segment.start, segment.end, segment.lineHeight);
+  //   fillNode.setRangeTextCase(segment.start, segment.end, segment.textCase);
+  //   fillNode.setRangeTextDecoration(segment.start, segment.end, segment.textDecoration);
+  // });
+}
+
+function BuildCodeFill(value) {
+  let fillString = '';
+  while (fillString.length < value.length) {
+    fillString = fillString + codeBackground;
+  }
+  return fillString;
+}
+function ReplaceAt(index, replacement, currentValue) {
+  return currentValue.substring(0, index) + replacement + currentValue.substring(index + replacement.length);
+}
+async function ApplyTextStyles(start, end, _componentTextNode, node) {
+  console.log(start, end);
+  if (typeof _componentTextNode.fontName != 'symbol') {
+    await figma.loadFontAsync(_componentTextNode.fontName);
+    node.setRangeFills(start, end, _componentTextNode.fills);
+    typeof _componentTextNode.fontName != 'symbol' && node.setRangeFontName(start, end, _componentTextNode.fontName);
+    typeof _componentTextNode.lineHeight != 'symbol' &&
+      node.setRangeLineHeight(start, end, _componentTextNode.lineHeight);
+    typeof _componentTextNode.letterSpacing != 'symbol' &&
+      node.setRangeLetterSpacing(start, end, _componentTextNode.letterSpacing);
+    typeof _componentTextNode.textDecoration != 'symbol' &&
+      node.setRangeTextDecoration(start, end, _componentTextNode.textDecoration);
+    typeof _componentTextNode.fontSize != 'symbol' && node.setRangeFontSize(start, end, _componentTextNode.fontSize);
+    typeof _componentTextNode.textCase != 'symbol' && node.setRangeTextCase(start, end, _componentTextNode.textCase);
   }
 }
 

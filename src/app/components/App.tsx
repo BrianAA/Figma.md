@@ -17,7 +17,6 @@ function App() {
   const [Data, setData] = React.useState('');
   const [Building, setBuilding] = React.useState(false);
   function CreateMarkdownEditor(data) {
-    console.log(data);
     const items = refractor.highlight(data, 'markdown');
     const html = toHtml(items);
     return parser(html);
@@ -47,7 +46,6 @@ function App() {
       mdastExtensions: [gfmTaskListItemFromMarkdown],
     });
     if (Markdown.children.length == 0) return;
-    console.log(Markdown.children);
     parent.postMessage(
       {
         pluginMessage: {

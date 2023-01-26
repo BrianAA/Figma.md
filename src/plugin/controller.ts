@@ -1,97 +1,66 @@
 figma.showUI(__html__, { height: 850, width: 500 });
 const codeBackground = `█`; //used to create a background fill for inline code
-figma.on('selectionchange', async () => {
-  const text = figma.currentPage.selection[0];
-  if (text.type == 'TEXT') {
-    console.log(
-      text.getStyledTextSegments(['fills', 'fontName', 'fontSize', 'fontWeight', 'hyperlink', 'textDecoration'])
-    );
-  }
-});
+// figma.on('selectionchange', async () => {
+//   const text = figma.currentPage.selection[0];
+//   if (text.type == 'TEXT') {
+//     console.log(
+//       text.getStyledTextSegments(['fills', 'fontName', 'fontSize', 'fontWeight', 'hyperlink', 'textDecoration'])
+//     );
+//   }
+// });
 
 figma.ui.onmessage = async (msg) => {
+  const selection = figma.currentPage.children[0];
   switch (msg.type) {
     case 'buildDefault':
       CreateDefaultComponents();
       break;
     case 'setMarkdown':
       let markdownData = {
-        id: figma.currentPage.selection[0].id,
+        id: selection.id,
         markdown: msg.markdown,
+        data:msg.markdownString
       };
-      BuildMarkdown(markdownData);
-      break;
-    case 'loadMarkDown':
-      const selection = figma.currentPage.children[0];
       if (selection.type == 'FRAME') {
-        const data = await GetMarkdown(figma.currentPage.selection[0].id);
-        figma.ui.postMessage({
-          type: 'loadMarkdown',
-          message: data,
-        });
+      BuildMarkdown(markdownData);
       }
       break;
+    case 'loadMarkDown':
+      if (selection.type == 'FRAME') {
+        LoadMarkDown()
+      }
+      break;
+    case 'saveMarkDown':
+      if(selection.type=="FRAME"){
+        SaveMarkDown(msg.data)
+      }
     default:
       break;
   }
 };
 
-async function GetMarkdown(docID) {
+function LoadMarkDown(){
   try {
-    const storedIDs = figma.root.getPluginData('componentIDs');
-    const componentIDs = JSON.parse(storedIDs);
-    const doc = figma.getNodeById(docID) as FrameNode;
-    let markdownData = '';
-
-    for (let i = 0; i < doc.children.length; i++) {
-      const child = doc.children[i];
-
-      if (child.type == 'INSTANCE') {
-        const mainID = child.mainComponent.id;
-        for (let key in componentIDs) {
-          const compareID = componentIDs[key];
-          if (compareID == mainID) {
-            switch (key) {
-              case 'heading1':
-                markdownData = markdownData + `\n# ${await GetText(child)} \n`;
-                break;
-              case 'heading2':
-                markdownData = markdownData + `\n## ${await GetText(child)} \n`;
-                break;
-              case 'heading3':
-                markdownData = markdownData + `\n### ${await GetText(child)} \n`;
-                break;
-              case 'heading4':
-                markdownData = markdownData + `\n#### ${await GetText(child)} \n`;
-                break;
-              case 'heading5':
-                markdownData = markdownData + `\n##### ${await GetText(child)} \n`;
-                break;
-              case 'heading5':
-                markdownData = markdownData + `\n###### ${await GetText(child)} \n`;
-                break;
-              case 'paragraph':
-                markdownData = markdownData + `\n${await GetText(child)} \n`;
-                break;
-              case 'thematicBreak':
-                markdownData = markdownData + `\n--- \n`;
-              case 'link':
-                markdownData = markdownData;
-              default:
-                break;
-            }
-          }
-        }
-      } else {
-        child.remove();
-        i = i - 1;
-      }
-    }
-    return markdownData;
+    const data=figma.currentPage.selection[0].getPluginData("figma.md");
+    figma.ui.postMessage({
+      type: 'loadMarkdown',
+      message: data,
+    });
   } catch (error) {
     console.log(error);
   }
 }
+
+function SaveMarkDown(data){
+  try {
+   figma.currentPage.selection[0].setPluginData(`figma.md`,data);
+   figma.notify("Success Data saved")
+  } catch (error) {
+    figma.notify("Failed to save")
+    console.log(error);
+  }
+}
+
 
 async function BuildMarkdown(markdownData) {
   let doc = figma.getNodeById(markdownData.id) as FrameNode;
@@ -104,14 +73,15 @@ async function BuildMarkdown(markdownData) {
     ids = JSON.parse(storedIDs);
   }
   try {
-    if (!doc) throw Error('Document does not exist');
+    if (!doc) throw Error('Document does not exist')
+    //If blocks and thie children dont match remove the remaining children
     while (blocks.length < doc.children.length) {
       for (let c = blocks.length - 1; doc.children.length; c++) {
         const child = doc.children[c];
         child.remove();
       }
     }
-    //Remaining blocks if there are new ones
+
     for (let i = 0; i < blocks.length; i++) {
       const block = blocks[i];
       const existingChild = doc.children[i];
@@ -127,30 +97,17 @@ async function BuildMarkdown(markdownData) {
         }
       } else {
         console.log('Creating component');
-        await CreateBlockType(block, ids, doc);
+        CreateBlockType(block, ids, doc);
       }
     }
-
-    // if (doc.children.length > blocks.length) {
-    //   doc.children.forEach((element, i) => {
-    //     if (element.type == 'INSTANCE') {
-    //       const mainID = element.mainComponent.id;
-    //       for (let key in ids) {
-    //         if (ids[key] == mainID && i > blocks.length) {
-    //           element.remove();
-    //         }
-    //       }
-    //     }
-    //   });
-    // }
   } catch (error) {
     console.log(error);
     figma.notify(error, { error: true });
   }
 }
 
-async function CreateBlockType(block, ids, parent) {
-  if (block.type != 'html' && block.type == 'inlineCode') {
+function CreateBlockType(block, ids, parent) {
+  if (block.type != 'html') {
     const _markdownType = GetMarkdownType(block);
     const ComponentNode = figma.getNodeById(ids[_markdownType]) as ComponentNode;
     const instance = ComponentNode.createInstance();
@@ -158,7 +115,6 @@ async function CreateBlockType(block, ids, parent) {
     instance.name = `${_markdownType}`;
     instance.layoutAlign = 'STRETCH';
     return instance;
-  } else if (block.type == 'inlineCode') {
   }
 }
 
@@ -172,6 +128,7 @@ function GetMarkdownType(block) {
 
 //This is a paragraphy with `code` and inline [link](www.google.com) and *emph* and **bold**
 async function SetText(instance, block, ids) {
+  const markdowntype=GetMarkdownType(block);
   //Search through children
   for (let i = 0; i < instance.children.length; i++) {
     const node = instance.children[i];
@@ -189,7 +146,6 @@ async function SetText(instance, block, ids) {
         'textDecoration',
         'textCase',
       ]);
-
       //If its a type of symbol iterate through the font
       if (typeof node.fontName == 'symbol') {
         for (let f = 0; f < textSegments.length; f++) {
@@ -205,47 +161,56 @@ async function SetText(instance, block, ids) {
       block.children.forEach(async (child) => {
         let start = fullParagraph.length;
         let end = fullParagraph.length;
-        console.log(child);
+
         if (child.type != 'text' && child.type != 'inlineCode') {
           fullParagraph = fullParagraph + child.children[0].value;
           end = fullParagraph.length;
-        } else {
+        } else if (child.type == "inlineCode") {
+          fullParagraph = fullParagraph + ` ${child.value} `;
+          end = fullParagraph.length;
+        }
+        else {
           fullParagraph = fullParagraph + child.value;
           end = fullParagraph.length;
         }
         node.characters = fullParagraph;
-        if (child.type == 'link') {
-          const Component = figma.getNodeById(ids['link']) as ComponentNode;
-          const _componentTextNode = Component.findChild(
-            (child) => child.type == 'TEXT' && child.name == 'value'
-          ) as TextNode;
-          node.setRangeHyperlink(start, end, { type: 'URL', value: child.url });
-          ApplyTextStyles(start, end, _componentTextNode, node);
-        } else if (child.type == 'inlineCode') {
-          const CodingComponent = figma.getNodeById(ids['inlineCode']) as ComponentNode;
-          instance.swapComponent(CodingComponent);
-          instance.name = 'paragraph+inlineCode';
-          const _componentTextNode = CodingComponent.findChild(
-            (child) => child.type == 'TEXT' && child.name == 'value'
-          ) as TextNode;
-          const _fillNode = CodingComponent.findChild(
-            (child) => child.type == 'TEXT' && child.name == 'Inline Code fill (Only change the color)'
-          ) as TextNode;
-          ApplyTextStyles(start, end, _componentTextNode, node);
-          ApplyCodeFill(start, child.value, node, _fillNode);
-        } else {
-          const Component = figma.getNodeById(ids[child.type == 'text' ? 'paragraph' : child.type]) as ComponentNode;
-          const _componentTextNode = Component.findChild(
-            (child) => child.type == 'TEXT' && child.name == 'value'
-          ) as TextNode;
-          ApplyTextStyles(start, end, _componentTextNode, node);
+
+
+        switch (child.type) {
+          case 'emphasis':
+            const emphasisStyles=figma.getNodeById(ids["emphasis"]) as ComponentNode;
+            ApplyTextStyles(start, end,emphasisStyles, node,false);
+            break;
+          case 'link':
+            const linkStyles=figma.getNodeById(ids["link"]) as ComponentNode;
+            node.setRangeHyperlink(start, end, { type: 'URL', value: child.url });
+            ApplyTextStyles(start, end,linkStyles, node,false);
+            break;
+          case 'strong':
+            const strongStyles=figma.getNodeById(ids["strong"]) as ComponentNode;
+            ApplyTextStyles(start, end,strongStyles, node,false);
+            break;
+          case 'inlineCode':
+            const CodingComponent = figma.getNodeById(ids['inlineCode']) as ComponentNode;
+            instance.swapComponent(CodingComponent);
+            instance.name = 'paragraph+inlineCode';
+            const _fillNode = CodingComponent.findChild(
+              (child) => child.type == 'TEXT' && child.name == 'Inline Code fill (Only change the color)'
+            ) as TextNode;
+            await ApplyTextStyles(start,end, CodingComponent, node,true);
+            await ApplyCodeFill(start, child.value, node, _fillNode,true);
+            break;
+          default:
+              const textStyle=figma.getNodeById(ids[markdowntype]) as ComponentNode;
+              ApplyTextStyles(start, end,textStyle, node,true);
+            break;
         }
       });
     }
   }
 }
 
-async function ApplyCodeFill(start, value, node, fillNode) {
+async function ApplyCodeFill(start, value, node, fillNode,useSize) {
   const textSegments = node.getStyledTextSegments([
     'fills',
     'fontName',
@@ -259,24 +224,29 @@ async function ApplyCodeFill(start, value, node, fillNode) {
   ]);
 
   let fillText = BuildCodeFill(value);
-  let newText = ReplaceAt(start, fillText, node.characters);
-  console.log(newText);
+
+  let newText = ReplaceAt(start, fillText, fillNode.characters.length != node.characters.lenght ? node.characters : fillNode.characters);
   fillNode.characters = newText;
+  console.log(node)
   console.log(textSegments);
-  // textSegments.forEach(async (segment) => {
-  //   await figma.loadFontAsync(segment.fontName);
-  //   fillNode.setRangeFontName(segment.start, segment.end, segment.fontName);
-  //   fillNode.setRangeFontSize(segment.start, segment.end, segment.fontSize);
-  //   fillNode.setRangeLetterSpacing(segment.start, segment.end, segment.letterSpacing);
-  //   fillNode.setRangeLineHeight(segment.start, segment.end, segment.lineHeight);
-  //   fillNode.setRangeTextCase(segment.start, segment.end, segment.textCase);
-  //   fillNode.setRangeTextDecoration(segment.start, segment.end, segment.textDecoration);
-  // });
+
+  for (let s = 0; s < textSegments.length; s++) {
+    const segment = textSegments[s]
+    await figma.loadFontAsync(segment.fontName);
+    if(useSize){
+      fillNode.setRangeFontSize(segment.start, segment.end, segment.fontSize);
+      fillNode.setRangeLineHeight(segment.start, segment.end, segment.lineHeight);
+    }
+    fillNode.setRangeFontName(segment.start, segment.end, segment.fontName);
+    fillNode.setRangeLetterSpacing(segment.start, segment.end, segment.letterSpacing);
+    fillNode.setRangeTextCase(segment.start, segment.end, segment.textCase);
+    fillNode.setRangeTextDecoration(segment.start, segment.end, segment.textDecoration);
+  };
 }
 
 function BuildCodeFill(value) {
   let fillString = '';
-  while (fillString.length < value.length) {
+  while (fillString.length < value.length + 2) {
     fillString = fillString + codeBackground;
   }
   return fillString;
@@ -284,20 +254,24 @@ function BuildCodeFill(value) {
 function ReplaceAt(index, replacement, currentValue) {
   return currentValue.substring(0, index) + replacement + currentValue.substring(index + replacement.length);
 }
-async function ApplyTextStyles(start, end, _componentTextNode, node) {
-  console.log(start, end);
+async function ApplyTextStyles(start, end, Component, node,useSize) {
+  const _componentTextNode=Component.findChild(
+    (child) => child.type == 'TEXT' && child.name == 'value'
+  ) as TextNode;
   if (typeof _componentTextNode.fontName != 'symbol') {
     await figma.loadFontAsync(_componentTextNode.fontName);
     node.setRangeFills(start, end, _componentTextNode.fills);
     typeof _componentTextNode.fontName != 'symbol' && node.setRangeFontName(start, end, _componentTextNode.fontName);
-    typeof _componentTextNode.lineHeight != 'symbol' &&
-      node.setRangeLineHeight(start, end, _componentTextNode.lineHeight);
     typeof _componentTextNode.letterSpacing != 'symbol' &&
       node.setRangeLetterSpacing(start, end, _componentTextNode.letterSpacing);
     typeof _componentTextNode.textDecoration != 'symbol' &&
       node.setRangeTextDecoration(start, end, _componentTextNode.textDecoration);
-    typeof _componentTextNode.fontSize != 'symbol' && node.setRangeFontSize(start, end, _componentTextNode.fontSize);
     typeof _componentTextNode.textCase != 'symbol' && node.setRangeTextCase(start, end, _componentTextNode.textCase);
+    if(useSize){
+      typeof _componentTextNode.fontSize != 'symbol' && node.setRangeFontSize(start, end, _componentTextNode.fontSize);
+      typeof _componentTextNode.lineHeight != 'symbol' &&
+      node.setRangeLineHeight(start, end, _componentTextNode.lineHeight);
+    }
   }
 }
 
@@ -311,6 +285,7 @@ async function GetText(instance) {
     }
   }
 }
+
 
 async function CreateDefaultComponents() {
   let ComponentIDs = {};
@@ -390,7 +365,7 @@ async function CreateDefaultComponents() {
   const codingFill = figma.createText();
   coding.fontName = codeFont;
   codingFill.fontName = codeFont;
-  coding.characters = ` Inline Code `;
+  coding.characters = `Inline Code`;
 
   coding.layoutGrow = 1;
   coding.fontSize = 16;

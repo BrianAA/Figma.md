@@ -25,6 +25,7 @@ function App() {
   function HandleChange(e) {
     setData(e);
   }
+  
   React.useEffect(() => {
     // This is how we read messages sent from the plugin controller
     window.onmessage = (event) => {
@@ -32,12 +33,7 @@ function App() {
       if (type === "loadMarkdown") {
         setData(message)
       }
-    };
-    document.addEventListener('keypress', (e) => {
-      if (e.key == 'Delete') {
-        setData('');
-      }
-    });
+    }
   }, []);
 
   React.useEffect(() => {
@@ -71,11 +67,21 @@ function App() {
   }
 
   function LoadMarkdown() {
-
     parent.postMessage(
       {
         pluginMessage: {
           type: 'loadMarkDown',
+        },
+      },
+      '*'
+    );
+  }
+
+  function SaveMarkdown() {
+    parent.postMessage(
+      {
+        pluginMessage: {
+          type: 'saveMarkDown',
         },
       },
       '*'
@@ -98,7 +104,8 @@ function App() {
       />
 
       <button disabled={Building} onClick={BuildDefault}>Build Default</button>
-      <button disabled={Building} onClick={LoadMarkdown}>Load Markdown</button>
+      <button  onClick={LoadMarkdown}>Load Markdown</button>
+      <button  onClick={SaveMarkdown}>Save Markdown</button>
     </div>
   );
 }

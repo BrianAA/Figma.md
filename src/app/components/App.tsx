@@ -47,7 +47,6 @@ function App() {
         pluginMessage: {
           type: 'setMarkdown',
           markdown: Markdown.children,
-          markdownString: Data
         },
       },
       '*'
@@ -82,6 +81,7 @@ function App() {
       {
         pluginMessage: {
           type: 'saveMarkDown',
+          data:Data
         },
       },
       '*'

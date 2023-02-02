@@ -1,3 +1,4 @@
+
 figma.showUI(__html__, { height: 850, width: 500 });
 const codeBackground = `█`; //used to create a background fill for inline code
 // figma.on('selectionchange', async () => {
@@ -12,15 +13,20 @@ const codeBackground = `█`; //used to create a background fill for inline code
 figma.ui.onmessage = async (msg) => {
   const selection = figma.currentPage.children[0];
   switch (msg.type) {
+    case 'init-load':
+      let storedIDs = figma.root.getPluginData('componentIDs');
+      figma.ui.postMessage({
+        type: "init-load",
+        message: storedIDs
+      })
     case 'buildDefault':
       CreateDefaultComponents();
       break;
     case 'setMarkdown':
       let markdownData = {
-        id: selection.id,
-        markdown: msg.markdown,
+        id: msg.id,
+        markdown: msg.data,
       };
-
       if (selection.type == 'FRAME') {
         BuildMarkdown(markdownData);
       }
@@ -54,12 +60,13 @@ function LoadMarkDown() {
 function SaveMarkDown(data) {
   try {
     figma.currentPage.selection[0].setPluginData(`figma.md`, data);
-    // figma.notify("Success Data saved")
+    figma.notify(`${figma.currentPage.selection[0].name} markdown saved`)
   } catch (error) {
-    // figma.notify("Failed to save")
+
     console.log(error);
   }
 }
+
 
 
 async function BuildMarkdown(markdownData) {
@@ -73,74 +80,143 @@ async function BuildMarkdown(markdownData) {
     ids = JSON.parse(storedIDs);
   }
   try {
+    let childIndex = doc.children.length;
     if (!doc) throw Error('Document does not exist')
-
     //If blocks and thie children dont match remove the remaining children
-    while (blocks.length < doc.children.length) {
+    while (blocks.length < childIndex) {
       console.log("There is some children we need to get rid off...")
-      for (let c = blocks.length - 1; doc.children.length; c++) {
-        const child = doc.children[c];
-        child.remove();
-      }
+      const child = doc.children[childIndex - 1];
+      child.remove();
+      childIndex--;
     }
-
-    for (let i = 0; i < blocks.length; i++) {
-      const block = blocks[i];
-      const existingChild = doc.children[i];
+    //Store existing children that need to be removed
+    const SubjectForRemoval = []
+    //Loop through markdown blocks
+    for (let b = 0; b < blocks.length; b++) {
+      const block = blocks[b];
+      const existingChild = doc.children[b];
+      const markdownType = GetMarkdownType(block);
+      let savedBlock = null
+      //If there is existing child at this index check for saved data
       if (existingChild) {
-        if (existingChild.type == 'INSTANCE') {
-          const markdownType = GetMarkdownType(block);
-          const _newMainComponent = figma.getNodeById(ids[markdownType]) as ComponentNode;
-          if (_newMainComponent) {
+        savedBlock = existingChild.getPluginData("markdownData")
+        !savedBlock && SubjectForRemoval.push(existingChild)
+        //If data was found and it does not equal block
+        if (savedBlock && block != savedBlock) {
+
+          //If the child is instance just swap it
+          if (existingChild.type == "INSTANCE") {
+            const _newMainComponent = figma.getNodeById(ids[markdownType]) as ComponentNode;
+
+            //If there is no matching component throw an error
+            if (!_newMainComponent) {
+              throw Error("Missing Markdown Component please assign a component for: " + block.type)
+            }
+            //Swap component rename it and set the text.
             existingChild.swapComponent(_newMainComponent);
             existingChild.name = _newMainComponent.name;
-            SetText(existingChild, block, ids);
-          } else {
-            throw Error("Missing Markdown Component")
+            SetText(existingChild, block, ids, false);
+          }
+          //If child is not an instance then push it to remove and create block
+          else {
+            SubjectForRemoval.push(existingChild);
+            console.log('Creating component ' + markdownType);
+            const instance = CreateBlockType(block, ids, doc, b);
+            instance.setPluginData("markdownData", JSON.stringify(block));
           }
         }
-      } else {
-        console.log('Creating component');
-        CreateBlockType(block, ids, doc);
+      }
+      else {
+        console.log('Creating component ' + markdownType);
+        const instance = CreateBlockType(block, ids, doc, b);
+        instance.setPluginData("markdownData", JSON.stringify(block));
       }
     }
+
+    //Remove childeren nodes flagged for removal
+    SubjectForRemoval.forEach(element => {
+      element.remove()
+    });
   } catch (error) {
     console.log(error);
   }
 }
 
-function CreateBlockType(block, ids, parent) {
+function CreateBlockType(block, ids, parent: FrameNode, index) {
   try {
-    if (block.type != 'html') {
-      const _markdownType = GetMarkdownType(block);
-      const ComponentNode = figma.getNodeById(ids[_markdownType]) as ComponentNode;
-      const instance = ComponentNode.createInstance();
-      parent.appendChild(instance);
-      instance.name = `${_markdownType}`;
-      instance.layoutAlign = 'STRETCH';
-      return instance;
+    let _markdownType = GetMarkdownType(block);
+    let ComponentNode = figma.getNodeById(ids[_markdownType]) as ComponentNode;
+    const instance = ComponentNode.createInstance();
+    parent.insertChild(index, instance);
+    instance.name = `${_markdownType}`;
+    instance.layoutAlign = 'STRETCH';
+
+    //If the markdown is ordered then set the index count.
+    if (_markdownType == "orderedList") {
+      console.log("Setting index");
+      SetListIndex(instance, block.index);
     }
+    return instance;
   } catch (error) {
     console.log(error)
   }
-
 }
 
+// Retrieves the markdown type 
 function GetMarkdownType(block) {
-  if (block.type == 'heading') {
-    return `heading${block.depth}`;
+  switch (block.type) {
+    case 'heading':
+      return `heading${block.depth}`;
+    case 'listItem':
+      return block.ordered ? "orderedList" : "unorderedList"
+    case 'html':
+      return block.value
+    default:
+      return block.type
+  }
+}
+
+//Sets the the markdown type
+function setType(block, isOrderedList) {
+  if (block.type == "listItem") {
+    return isOrderedList ? "orderedList" : "unorderedList";
   } else {
-    return block.type;
+    return block.type
+  }
+}
+
+async function SetListIndex(node, i) {
+  const TextNodes = node.findAllWithCriteria({
+    types: ['TEXT']
+  });
+  let Index = null;
+  TextNodes.forEach(n => {
+    console.log(n);
+    if (n.name == "index-value") {
+      Index = n
+    };
+  });
+  if (Index) {
+    if (typeof Index.fontName == "symbol") {
+      figma.notify("Error: The list component number text has multiple text styles. Please use modify to make sure the text only uses one style", { error: true })
+      return;
+    }
+    await figma.loadFontAsync(Index.fontName);
+    Index.characters = i + "."
   }
 }
 
 //This is a paragraphy with `code` and inline [link](www.google.com) and *emph* and **bold**
-async function SetText(instance, block, ids) {
+async function SetText(instance, block, ids, isOrderedList) {
   try {
-    const markdowntype = GetMarkdownType(block);
+    //Only for list types
+    const blockType = setType(block, isOrderedList);
+    const markdowntype = GetMarkdownType(blockType)
     //Search through children
     for (let i = 0; i < instance.children.length; i++) {
       const node = instance.children[i];
+      //Only used for coded text
+
       //find child that meet these requirements
       if (node.name == 'value' && node.type == 'TEXT') {
         //Pull all the segments if there are any before modifying
@@ -166,89 +242,96 @@ async function SetText(instance, block, ids) {
 
         //Full text of each item in the paragraph block
         let fullParagraph = '';
-        let codeParagraph='';
-        let hasCode=false;
-        block.children.forEach(async (child) => {
-          let start = fullParagraph.length;
-          let end = fullParagraph.length;
-
-          if (child.type != 'text' && child.type != 'inlineCode') {
-            fullParagraph = fullParagraph + child.children[0].value;
-            codeParagraph=codeParagraph+child.children[0].value;
-            end = fullParagraph.length;
-          } else if (child.type == "inlineCode") {
-            fullParagraph = fullParagraph + ` ${child.value} `;
-            codeParagraph=codeParagraph+`${BuildCodeFill(child.value)}`
-            end = fullParagraph.length;
-          }
-          else {
-            fullParagraph = fullParagraph + child.value;
-            codeParagraph=codeParagraph+child.value;
-            end = fullParagraph.length;
-          }
-          //Inline Components
-          const CodingComponent = figma.getNodeById(ids['inlineCode']) as ComponentNode;
-          const linkStyles = figma.getNodeById(ids["link"]) as ComponentNode;
-          const emphasisStyles = figma.getNodeById(ids["emphasis"]) as ComponentNode;
-          const dynamicStyle = figma.getNodeById(ids[markdowntype]) as ComponentNode;
-          const strongStyles = figma.getNodeById(ids["strong"]) as ComponentNode;
-          const blockQuoteStyle=figma.getNodeById(ids["blockQoute"]) as ComponentNode;
-
-          let _fillNode = instance.findChild(
-            (child) => child.type == 'TEXT'&&child.layoutPositioning=="ABSOLUTE" && child.name.includes("fill")
-          ) as TextNode;
-
-          node.characters = fullParagraph;
-          if(_fillNode){
-            _fillNode.characters=codeParagraph;
+        let codeParagraph = '';
+        let hasCode = false;
+        block.children.forEach(async (blockChild) => {
+          if (blockChild.type == "paragraph") {
+            blockChild.children.forEach(c => {
+              IterateThroughChildren(c)
+            });
+          } else {
+            IterateThroughChildren(blockChild)
           }
 
+          // 
+          async function IterateThroughChildren(child) {
+            let start = fullParagraph.length;
+            let end = fullParagraph.length;
 
-          switch (child.type) {
-            case 'emphasis':
-              ApplyTextStyles(start, end, emphasisStyles, node, false,true);
-              if(hasCode){ 
-                ApplyTextStyles(start, end, emphasisStyles, _fillNode, false,false);
-              }
-              break;
-            case 'link':
-              node.setRangeHyperlink(start, end, { type: 'URL', value: child.url });
-              ApplyTextStyles(start, end, linkStyles, node, false,true);
-              if(hasCode){
-                ApplyTextStyles(start, end, linkStyles, _fillNode, false,false);
-              }
-              break;
-            case 'strong':
-              ApplyTextStyles(start, end, strongStyles, node, false,true);
-              if(hasCode){
-                ApplyTextStyles(start, end, strongStyles, _fillNode, false,false);
-              }
-              break;
-              case 'blockQoute':
-                ApplyTextStyles(start, end, blockQuoteStyle, node, false,true);
-                if(hasCode){
-                  ApplyTextStyles(start, end, blockQuoteStyle, _fillNode, false,false);
-                }
+            if (child.type != 'text' && child.type != 'inlineCode') {
+              fullParagraph = fullParagraph + child.children[0].value;
+              codeParagraph = codeParagraph + child.children[0].value;
+              end = fullParagraph.length;
+            } else if (child.type == "inlineCode") {
+              fullParagraph = fullParagraph + ` ${child.value} `;
+              codeParagraph = codeParagraph + `${BuildCodeFill(child.value)}`
+              end = fullParagraph.length;
+            }
+            else {
+              fullParagraph = fullParagraph + child.value;
+              codeParagraph = codeParagraph + child.value;
+              end = fullParagraph.length;
+            }
+            //Inline Components
+            const CodingComponent = figma.getNodeById(ids['inlineCode']) as ComponentNode;
+            const linkStyles = figma.getNodeById(ids["link"]) as ComponentNode;
+            const emphasisStyles = figma.getNodeById(ids["emphasis"]) as ComponentNode;
+            const dynamicStyle = figma.getNodeById(ids[markdowntype]) as ComponentNode;
+            const strongStyles = figma.getNodeById(ids["strong"]) as ComponentNode;
+            const blockQuoteStyle = figma.getNodeById(ids["blockQoute"]) as ComponentNode;
+            let _fillNode = instance.findChild(
+              (child) => child.type == 'TEXT' && child.layoutPositioning == "ABSOLUTE" && child.name.includes("fill")
+            ) as TextNode;
+            node.characters = fullParagraph;
+
+            // if (hasCode && _fillNode.characters) {
+            //   _fillNode.characters = codeParagraph;
+            // }
+
+
+            switch (child.type) {
+              case 'emphasis':
+                ApplyTextStyles(start, end, emphasisStyles, node, false, true, false);
                 break;
-            case 'inlineCode':
-              instance.swapComponent(CodingComponent);
-              instance.name = 'paragraph+inlineCode';
-              hasCode=true;
-              await ApplyTextStyles(start, end, CodingComponent, node, true,true);
-              if(hasCode){
-                ApplyTextStyles(start, end, CodingComponent, _fillNode, false,false);
-              }
-              break;
-            default:
-              ApplyTextStyles(start, end, dynamicStyle, node, true,true);
-              if(hasCode){
-                ApplyTextStyles(start, end, dynamicStyle, _fillNode, false,false);
-              }
-              break;
+              case 'link':
+                node.setRangeHyperlink(start, end, { type: 'URL', value: child.url });
+                ApplyTextStyles(start, end, linkStyles, node, false, true, false);
+                break;
+              case 'strong':
+                ApplyTextStyles(start, end, strongStyles, node, false, true, false);
+                break;
+              case 'blockQoute':
+                ApplyTextStyles(start, end, blockQuoteStyle, node, false, true, false);
+                break;
+              case 'inlineCode':
+                instance.name = 'paragraph+inlineCode';
+                hasCode = true;
+                instance.swapComponent(CodingComponent);
+                instance.children.forEach(c => {
+                  if (instance.type == "TEXT") {
+                    if (c.name == "value") {
+                      ApplyTextStyles(start, end, CodingComponent, c, true, true, false);
+                    } else if (c.name.includes("fill")) {
+                      ApplyTextStyles(start, end, dynamicStyle, c, false, false, true);
+                    }
+                  }
+                })
+
+                break;
+              default:
+                ApplyTextStyles(start, end, dynamicStyle, node, true, true, false);
+                break;
+            }
+            if (hasCode) {
+              console.log(_fillNode);
+              // ApplyTextStyles(start, end, dynamicStyle, _fillNode, false, false, true);
+            }
           }
         });
+        return node;
       }
     }
+
   } catch (error) {
     console.log(error)
   }
@@ -263,14 +346,21 @@ function BuildCodeFill(value) {
   return fillString;
 }
 
-async function ApplyTextStyles(start, end, Component, node, useSize,useFill) {
-  const _componentTextNode = Component.findChild(
-    (child) => child.type == 'TEXT' && child.name == 'value'
-  ) as TextNode;
+async function ApplyTextStyles(start, end, Component, node, useSize, useFill, isCode) {
+  let _componentTextNode;
+  if (!isCode) {
+    _componentTextNode = Component && Component.findChild(
+      (child) => child.type == 'TEXT' && child.name == 'value'
+    ) as TextNode;
+  } else {
+    _componentTextNode = Component && Component.findChild(
+      (child) => child.type == 'TEXT' && child.layoutPositioning == 'ABSOLUTE'
+    ) as TextNode;
+  }
+  if (!_componentTextNode) return;
   if (typeof _componentTextNode.fontName != 'symbol') {
     await figma.loadFontAsync(_componentTextNode.fontName);
-    
-    if(useFill){
+    if (useFill) {
       node.setRangeFills(start, end, _componentTextNode.fills);
     }
     if (useSize) {
@@ -278,27 +368,26 @@ async function ApplyTextStyles(start, end, Component, node, useSize,useFill) {
       typeof _componentTextNode.lineHeight != 'symbol' &&
         node.setRangeLineHeight(start, end, _componentTextNode.lineHeight);
     }
-
     typeof _componentTextNode.fontName != 'symbol' && node.setRangeFontName(start, end, _componentTextNode.fontName);
     typeof _componentTextNode.letterSpacing != 'symbol' &&
       node.setRangeLetterSpacing(start, end, _componentTextNode.letterSpacing);
     typeof _componentTextNode.textDecoration != 'symbol' &&
       node.setRangeTextDecoration(start, end, _componentTextNode.textDecoration);
     typeof _componentTextNode.textCase != 'symbol' && node.setRangeTextCase(start, end, _componentTextNode.textCase);
-   
+
   }
 }
 
-async function GetText(instance) {
-  for (let i = 0; i < instance.children.length; i++) {
-    const node = instance.children[i];
-    if (node.name == 'value' && node.type == 'TEXT') {
-      if (typeof node.fontName == 'symbol') return; //Throw error;
-      await figma.loadFontAsync(node.fontName);
-      return node.characters;
-    }
-  }
-}
+// async function GetText(instance) {
+//   for (let i = 0; i < instance.children.length; i++) {
+//     const node = instance.children[i];
+//     if (node.name == 'value' && node.type == 'TEXT') {
+//       if (typeof node.fontName == 'symbol') return; //Throw error;
+//       await figma.loadFontAsync(node.fontName);
+//       return node.characters;
+//     }
+//   }
+// }
 
 
 async function CreateDefaultComponents() {
@@ -330,7 +419,7 @@ async function CreateDefaultComponents() {
     //Create frame for text to live in
     const headingFrame = figma.createComponent();
     headingFrame.layoutMode = 'HORIZONTAL';
-    headingFrame.paddingBottom = i < 4 ? 16 : 8;
+    headingFrame.paddingBottom = i < 4 ? 8 : 4;
     headingFrame.primaryAxisSizingMode = 'FIXED';
     headingFrame.counterAxisSizingMode = 'AUTO';
     headingFrame.resize(200, 100);
@@ -568,13 +657,13 @@ async function CreateDefaultComponents() {
   listItemFrame.layoutMode = 'HORIZONTAL';
   listItemFrame.primaryAxisSizingMode = 'FIXED';
   listItemFrame.counterAxisSizingMode = 'AUTO';
-  listItemFrame.counterAxisAlignItems = 'CENTER';
+  listItemFrame.counterAxisAlignItems = 'MIN';
   listItemFrame.layoutAlign = 'STRETCH';
   listItemFrame.itemSpacing = 4;
-  listItemFrame.paddingBottom = 16;
-  listItemFrame.paddingTop = 16;
 
   const listItemAccent = figma.createFrame();
+  const AccentHolder = figma.createFrame();
+  AccentHolder.layoutMode = "VERTICAL";
   const listAccentFill: SolidPaint = {
     type: 'SOLID',
     color: {
@@ -586,10 +675,17 @@ async function CreateDefaultComponents() {
     visible: true,
   };
   listItemAccent.fills = [listAccentFill];
-  listItemAccent.resize(8, 8);
-  listItemAccent.cornerRadius = 8;
-  listItemFrame.appendChild(listItemAccent);
-  listItemAccent.name = 'Accent';
+  listItemAccent.resize(4, 4);
+  listItemAccent.cornerRadius = 4;
+  AccentHolder.appendChild(listItemAccent);
+  listItemFrame.appendChild(AccentHolder);
+  AccentHolder.layoutAlign = "INHERIT";
+  AccentHolder.primaryAxisSizingMode = "AUTO";
+  AccentHolder.primaryAxisAlignItems = "MIN";
+  AccentHolder.counterAxisSizingMode = "AUTO";
+  AccentHolder.layoutGrow = 0;
+  AccentHolder.name = 'Accent';
+
 
   const listItemText = figma.createText();
   listItemText.fontName = defaultFont;
@@ -608,12 +704,13 @@ async function CreateDefaultComponents() {
   orderedListItemFrame.primaryAxisSizingMode = 'FIXED';
   orderedListItemFrame.counterAxisSizingMode = 'AUTO';
   orderedListItemFrame.counterAxisAlignItems = 'CENTER';
+  orderedListItemFrame.counterAxisAlignItems = "MIN"
   orderedListItemFrame.layoutAlign = 'STRETCH';
   orderedListItemFrame.itemSpacing = 4;
-  orderedListItemFrame.paddingBottom = 16;
-  orderedListItemFrame.paddingTop = 16;
 
   const orderedListItemNumber = figma.createText();
+  const listHolder = figma.createFrame();
+  listHolder.layoutMode = "VERTICAL";
   orderedListItemNumber.fontName = defaultFont;
   orderedListItemNumber.layoutGrow = 0;
   orderedListItemNumber.fontSize = 16;
@@ -627,10 +724,28 @@ async function CreateDefaultComponents() {
   orderedListItemText.characters = 'Ordered List Item';
   orderedListItemText.name = 'value';
 
-  orderedListItemFrame.appendChild(orderedListItemNumber);
+  listHolder.appendChild(orderedListItemNumber);
+  orderedListItemFrame.appendChild(listHolder);
   orderedListItemFrame.appendChild(orderedListItemText);
+  listHolder.layoutAlign = "INHERIT";
+  listHolder.primaryAxisSizingMode = "AUTO";
+  listHolder.primaryAxisAlignItems = "MIN";
+  listHolder.counterAxisSizingMode = "AUTO";
+  listHolder.layoutGrow = 0;
+  listHolder.name = 'Accent';
+
   Organizer.appendChild(orderedListItemFrame);
   ComponentIDs['orderedList'] = orderedListItemFrame.id;
+
+  //break
+  const space = figma.createComponent();
+  space.resize(100, 24);
+  space.name = "Line-Break";
+  Organizer.appendChild(space);
+  ComponentIDs["<br/>"] = space.id;
+  space.layoutAlign = "STRETCH";
+
+
 
   //TODO Add checkbox and ``` Code snippets```
   //Store keys

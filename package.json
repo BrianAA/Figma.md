@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@figma-plugin/helpers": "^0.15.2",
+    "@stitches/react": "^1.2.8",
     "dom-to-svg": "^0.12.2",
     "hast-util-from-html": "^1.0.1",
     "hast-util-to-html": "^8.0.4",

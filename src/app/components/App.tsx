@@ -98,9 +98,6 @@ function App() {
         <InitScreen setView={setView} />
       }
 
-      <button disabled={mrkDwn_Components ? true : false} onClick={BuildDefault}>Build Default</button>
-      <button onClick={LoadMarkdown}>Load Markdown</button>
-      <button onClick={SaveMarkdown}>Save Markdown</button>
     </div>
   );
 }

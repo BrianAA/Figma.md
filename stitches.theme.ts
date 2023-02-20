@@ -3,7 +3,7 @@ import { createStitches } from "@stitches/react";
 export const { styled, css } = createStitches({
     theme: {
         colors: {
-            gray500: 'hsl(206,10%,76%)',
+            gray500: '#666666',
             blue500: 'hsl(206,100%,50%)',
             purple500: 'hsl(252,78%,60%)',
             green500: 'hsl(148,60%,60%)',

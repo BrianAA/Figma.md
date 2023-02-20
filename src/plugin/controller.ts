@@ -1,5 +1,5 @@
 
-figma.showUI(__html__, { height: 850, width: 500 });
+figma.showUI(__html__, { height: 430, width: 380 });
 const codeBackground = `█`; //used to create a background fill for inline code
 // figma.on('selectionchange', async () => {
 //   const text = figma.currentPage.selection[0];

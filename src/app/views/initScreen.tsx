@@ -1,12 +1,13 @@
 import * as React from "react";
-import { BrandName } from "../../lib/branding";
+import { BrandName } from "../../lib/plugin-config";
 import { styled } from "../../../stitches.theme";
 //@ts-ignore
 import splash from "../assets/splash-image.png"
 import { Headings } from "../components/Headings";
 import { P } from "../components/Paragraph";
 import { Button } from "../components/Button";
-import PrevButton from "../components/PrevButton";
+import { screens } from "../../lib/plugin-config";
+import { BottomBar } from "../components/BottomBar";
 export default function InitScreen({ setView }) {
     const Container = styled("div", {
         padding: 16,
@@ -22,10 +23,9 @@ export default function InitScreen({ setView }) {
                     
                     Figma.md uses standard markdown syntax, but as well extends the markdown editing power using Figma components.`}
                 </P>
-                <Container css={{ padding: 0, display: "flex", justifyContent: "end" }}>
-                    <PrevButton onClick={null} />
-                    <Button onClick={() => setView("main")}>Next</Button>
-                </Container>
+                <BottomBar>
+                    <Button onClick={() => setView(screens.gettingStarted)}>Next</Button>
+                </BottomBar>
             </Container>
 
         </section>

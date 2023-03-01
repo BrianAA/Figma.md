@@ -14,10 +14,11 @@ figma.ui.onmessage = async (msg) => {
   const selection = figma.currentPage.children[0];
   switch (msg.type) {
     case 'init-load':
-      let storedIDs = figma.root.getPluginData('componentIDs');
+      let markdownIDs = figma.root.getPluginData('componentIDs');
+      let documentsIDs = figma.root.getPluginData("figma.md-documents");
       figma.ui.postMessage({
         type: "init-load",
-        message: storedIDs
+        message: { markdownIDs: markdownIDs, documentsIDs: documentsIDs }
       })
     case 'buildDefault':
       CreateDefaultComponents();

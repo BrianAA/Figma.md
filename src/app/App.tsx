@@ -1,6 +1,6 @@
 import React from 'react';
-import '../styles/ui.css';
-import InitScreen from '../views/initScreen';
+import './styles/ui.css';
+import InitScreen from './views/initScreen';
 import Editor from 'react-simple-code-editor';
 import { refractor } from 'refractor/lib/core';
 import markdown from 'refractor/lang/markdown';
@@ -10,8 +10,11 @@ import 'prism-themes/themes/prism-ghcolors.css';
 import { fromMarkdown } from 'mdast-util-from-markdown';
 import { gfmTaskListItem } from 'micromark-extension-gfm-task-list-item';
 import { gfmTaskListItemFromMarkdown } from 'mdast-util-gfm-task-list-item';
-//@ts-ignore
-import { BuildDefault, InitLoad, LoadMarkdown, SaveMarkdown, setMarkdown } from '../command-center';
+//@ts-ignorec
+import { BuildDefault, InitLoad, LoadMarkdown, SaveMarkdown, setMarkdown } from './command-center';
+import { screens } from '../lib/plugin-config';
+import GettingStarted from './views/gettingStarted';
+import SetUpLoading from './views/SetUpLoading';
 
 refractor.register(markdown);
 
@@ -28,6 +31,7 @@ function App() {
       const { type, message } = event.data.pluginMessage;
       switch (type) {
         case 'loadMarkdown':
+          console.log(message);
           setData(message);
           break;
         case 'init-load':
@@ -96,10 +100,15 @@ function App() {
           }}
         />}
 
-      {View == "init" &&
+      {View == screens.init &&
         <InitScreen setView={setView} />
       }
-
+      {View == screens.gettingStarted &&
+        <GettingStarted setView={setView} />
+      }
+      {View == screens.loading &&
+        <SetUpLoading progressValue={80} LoadingText={"Generating Default Components"} setView={setView} />
+      }
     </div>
   );
 }

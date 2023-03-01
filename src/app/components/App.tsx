@@ -10,6 +10,7 @@ import 'prism-themes/themes/prism-ghcolors.css';
 import { fromMarkdown } from 'mdast-util-from-markdown';
 import { gfmTaskListItem } from 'micromark-extension-gfm-task-list-item';
 import { gfmTaskListItemFromMarkdown } from 'mdast-util-gfm-task-list-item';
+//@ts-ignore
 import { BuildDefault, InitLoad, LoadMarkdown, SaveMarkdown, setMarkdown } from '../command-center';
 
 refractor.register(markdown);
@@ -32,6 +33,7 @@ function App() {
         case 'init-load':
           // setView(message ? "main" : "init")
           setMrkDownComponents(message);
+          console.log(mrkDwn_Components)
           console.log(message)
           break;
         case 'currentDoc':

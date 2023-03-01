@@ -23,7 +23,7 @@ export default function InitScreen({ setView }) {
                     Figma.md uses standard markdown syntax, but as well extends the markdown editing power using Figma components.`}
                 </P>
                 <Container css={{ padding: 0, display: "flex", justifyContent: "end" }}>
-                    <PrevButton />
+                    <PrevButton onClick={null} />
                     <Button onClick={() => setView("main")}>Next</Button>
                 </Container>
             </Container>
